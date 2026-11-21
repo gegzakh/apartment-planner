@@ -103,7 +103,9 @@ export function getMaterial(spec: MaterialSpec | undefined, fallbackColor: strin
     color: map ? '#ffffff' : color,
     map,
     roughness: def.roughness,
-    metalness: def.metalness ?? 0,
+    // Metals mostly show reflections; keep some diffuse colour and boost reflections so they don't go black in dim interiors.
+    metalness: Math.min(def.metalness ?? 0, 0.7),
+    envMapIntensity: 1 + 2 * (def.metalness ?? 0),
     transparent: def.opacity !== undefined,
     opacity: def.opacity ?? 1,
     side: opt.side ?? THREE.FrontSide,
