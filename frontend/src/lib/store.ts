@@ -71,6 +71,7 @@ interface State {
   lighting: 'day' | 'evening' | 'night'
   xray: boolean
   activeViewpoint: string | null
+  compareWith: string | null
   snapStep: number
   dirty: boolean
   toast: string | null
@@ -112,6 +113,7 @@ export const useStore = create<State>((set, get) => ({
   lighting: 'day',
   xray: false,
   activeViewpoint: null,
+  compareWith: null,
   snapStep: 0.05,
   dirty: false,
   toast: null,

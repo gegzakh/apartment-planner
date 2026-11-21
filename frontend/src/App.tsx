@@ -1,122 +1,228 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import Editor2D from './components/Editor2D'
+import ExportDialog from './components/ExportDialog'
+import ImportDialog from './components/ImportDialog'
+import JsonDialog from './components/JsonDialog'
+import LeftPanel from './components/LeftPanel'
+import RightPanel from './components/RightPanel'
+import { deleteProject, importFile, listProjects, loadProject, saveProject } from './lib/api'
+import { emptyPlan, useStore } from './lib/store'
+import type { Plan } from './lib/types'
 
-function App() {
-  const [count, setCount] = useState(0)
+const Scene3D = lazy(() => import('./components/Scene3D'))
 
+function normalize(p: Plan): Plan {
+  const e = emptyPlan()
+  return { ...e, ...p, settings: { ...e.settings, ...p.settings } }
+}
+
+export default function App() {
+  const viewMode = useStore((s) => s.viewMode)
+  const mode3d = useStore((s) => s.mode3d)
+  const lighting = useStore((s) => s.lighting)
+  const xray = useStore((s) => s.xray)
+  const plan = useStore((s) => s.plan)
+  const past = useStore((s) => s.past.length)
+  const future = useStore((s) => s.future.length)
+  const toast = useStore((s) => s.toast)
+  const projectId = useStore((s) => s.projectId)
+  const dirty = useStore((s) => s.dirty)
+  const activeVp = useStore((s) => s.activeViewpoint)
+  const { set, undo, redo, update } = useStore.getState()
+  const [dialog, setDialog] = useState<null | 'import' | 'export' | 'json' | 'projects'>(null)
+  const [saved, setSaved] = useState<'saved' | 'saving' | 'offline'>('saved')
+  const loaded = useRef(false)
+
+  // ---- load last project ----
+  useEffect(() => {
+    const id = localStorage.getItem('ap:project') || 'default'
+    loadProject(id)
+      .then((doc) => {
+        set({ projectId: id, plan: normalize(doc.plan), versions: doc.versions ?? [], past: [], future: [], dirty: false })
+        window.dispatchEvent(new Event('plan:fit'))
+      })
+      .catch(() => {
+        const local = localStorage.getItem(`ap:plan:${id}`)
+        if (local) set({ projectId: id, plan: normalize(JSON.parse(local)), dirty: false })
+        else setDialog('import')
+      })
+      .finally(() => (loaded.current = true))
+  }, [set])
+
+  // ---- autosave ----
+  useEffect(() => {
+    if (!dirty || !loaded.current) return
+    setSaved('saving')
+    const t = setTimeout(async () => {
+      const st = useStore.getState()
+      localStorage.setItem(`ap:plan:${st.projectId}`, JSON.stringify(st.plan))
+      localStorage.setItem('ap:project', st.projectId)
+      try {
+        await saveProject(st.projectId, { name: st.plan.name, plan: st.plan, versions: st.versions })
+        set({ dirty: false })
+        setSaved('saved')
+      } catch {
+        setSaved('offline')
+      }
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [dirty, plan, set])
+
+  // ---- shortcuts ----
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return
+      const mod = e.ctrlKey || e.metaKey
+      const st = useStore.getState()
+      if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo() }
+      else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo() }
+      else if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); st.duplicateSelection() }
+      else if (e.key === 'Delete' || e.key === 'Backspace') st.deleteSelection()
+      else if (!mod && st.mode3d !== 'walk') {
+        const map: Record<string, Parameters<typeof st.setTool>> = { v: ['select'], w: ['wall', '0.12'], d: ['door'], r: ['room'], m: ['measure'], h: ['pan'] }
+        const k = map[e.key.toLowerCase()]
+        if (k && !(st.viewMode === '3d')) st.setTool(...k)
+      }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [undo, redo])
+
+  async function loadSample() {
+    const blob = await (await fetch('/sample-plan.pdf')).blob()
+    const res = await importFile(new File([blob], 'sample-plan.pdf', { type: 'application/pdf' }), 'general')
+    const p = emptyPlan()
+    p.name = 'Sample apartment'
+    p.walls = res.walls ?? []
+    p.openings = res.openings ?? []
+    p.rooms = res.rooms ?? []
+    p.furniture = res.furniture ?? []
+    p.settings.scale = res.scale
+    p.overlays = [{ id: 'ov_sample', kind: 'general', name: 'sample-plan.pdf', url: res.overlayUrl, ...res.overlay, opacity: 0.5, visible: false }]
+    useStore.getState().setPlan(p)
+    setDialog(null)
+    setTimeout(() => window.dispatchEvent(new Event('plan:fit')), 50)
+  }
+
+  async function newProject() {
+    const id = `p${Date.now().toString(36)}`
+    set({ projectId: id, plan: emptyPlan(), versions: [], past: [], future: [], selection: null, dirty: true })
+    localStorage.setItem('ap:project', id)
+    setDialog('import')
+  }
+
+  const show2d = viewMode !== '3d'
+  const show3d = viewMode !== '2d'
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="app">
+      <header className="topbar">
+        <span className="brand">🏠 Apartment Planner</span>
+        <input className="name-input" value={plan.name} onChange={(e) => update((d) => (d.name = e.target.value), { coalesce: 'name' })} />
+        <button onClick={() => setDialog('projects')}>Projects</button>
+        <button className="primary" onClick={() => setDialog('import')}>⬆ Upload plan</button>
+        <span className="sep" />
+        <button className="ghost" disabled={!past} onClick={undo} title="Undo (Ctrl+Z)">↶</button>
+        <button className="ghost" disabled={!future} onClick={redo} title="Redo (Ctrl+Shift+Z)">↷</button>
+        <span className="sep" />
+        <div className="seg">
+          {(['2d', 'split', '3d'] as const).map((m) => (
+            <button key={m} className={viewMode === m ? 'active' : ''} onClick={() => set({ viewMode: m })}>{m === 'split' ? '2D | 3D' : m.toUpperCase()}</button>
+          ))}
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+        <span className="spacer" />
+        <span className="small muted">{saved === 'saving' ? 'Saving…' : saved === 'offline' ? 'Saved in browser only' : 'All changes saved'}</span>
+        <button onClick={() => setDialog('json')}>{'{ } JSON'}</button>
+        <button className="primary" onClick={() => setDialog('export')}>⇪ Download / Share</button>
+      </header>
+      <div className="main">
+        <LeftPanel />
+        <div className={`stage ${viewMode === 'split' ? 'split' : ''}`}>
+          {show2d && (
+            <div className="pane">
+              <Editor2D />
+              <div className="float-bar right">
+                <button onClick={() => window.dispatchEvent(new Event('plan:fit'))} title="Fit to screen">⤢ Fit</button>
+              </div>
+              {plan.walls.length === 0 && (
+                <div className="overlay-hint" style={{ bottom: '45%', pointerEvents: 'auto' }}>
+                  Upload a plan PDF, draw walls with the Wall tool, or <a href="#" style={{ color: '#9cd0ff' }} onClick={(e) => { e.preventDefault(); loadSample() }}>open the sample apartment</a>
+                </div>
+              )}
+            </div>
+          )}
+          {show3d && (
+            <div className="pane">
+              <Suspense fallback={<div className="overlay-hint">Loading 3D…</div>}>
+                <Scene3D />
+              </Suspense>
+              <div className="float-bar">
+                <div className="seg">
+                  {(['orbit', 'walk', 'pano'] as const).map((m) => (
+                    <button key={m} className={mode3d === m ? 'active' : ''} onClick={() => set({ mode3d: m })}>{m === 'orbit' ? '🧊 Orbit' : m === 'walk' ? '🚶 Walk' : '◉ 360°'}</button>
+                  ))}
+                </div>
+                <div className="seg">
+                  {(['day', 'evening', 'night'] as const).map((l) => (
+                    <button key={l} className={lighting === l ? 'active' : ''} onClick={() => set({ lighting: l })}>{l === 'day' ? '☀' : l === 'evening' ? '🌇' : '🌙'}</button>
+                  ))}
+                </div>
+                {mode3d === 'orbit' && <button className={xray ? 'active' : ''} onClick={() => set({ xray: !xray })} title="Cut walls at 1.1 m to see inside">✂ Cutaway</button>}
+                {mode3d !== 'orbit' && (
+                  <select value={activeVp ?? ''} onChange={(e) => set({ activeViewpoint: e.target.value || null })}>
+                    <option value="">{plan.viewpoints.length ? 'Viewpoint…' : 'Room centre (add 360° points in 2D)'}</option>
+                    {plan.viewpoints.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                )}
+                <button onClick={() => setDialog('export')}>📷 Render</button>
+              </div>
+            </div>
+          )}
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+        <RightPanel />
+      </div>
+      {dialog === 'import' && <ImportDialog onClose={() => setDialog(null)} />}
+      {dialog === 'export' && <ExportDialog onClose={() => setDialog(null)} />}
+      {dialog === 'json' && <JsonDialog onClose={() => setDialog(null)} />}
+      {dialog === 'projects' && (
+        <ProjectsDialog current={projectId} onClose={() => setDialog(null)} onNew={newProject} onSample={loadSample} />
+      )}
+      {toast && <div className="toast">{toast}</div>}
+    </div>
   )
 }
 
-export default App
+function ProjectsDialog({ current, onClose, onNew, onSample }: { current: string; onClose: () => void; onNew: () => void; onSample: () => void }) {
+  const [items, setItems] = useState<{ id: string; name: string; updatedAt: number }[] | null>(null)
+  const [err, setErr] = useState('')
+  const refresh = () => listProjects().then(setItems).catch((e) => setErr(e.message))
+  useEffect(() => { refresh() }, [])
+  async function open(id: string) {
+    const doc = await loadProject(id)
+    useStore.getState().set({ projectId: id, plan: normalize(doc.plan), versions: doc.versions ?? [], past: [], future: [], selection: null, dirty: false, compareWith: null })
+    localStorage.setItem('ap:project', id)
+    onClose()
+    setTimeout(() => window.dispatchEvent(new Event('plan:fit')), 50)
+  }
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Projects <button className="ghost" onClick={onClose}>✕</button></h3>
+        <div className="chips" style={{ marginBottom: 10 }}>
+          <button className="primary" onClick={onNew}>+ New project</button>
+          <button onClick={onSample}>Load sample apartment</button>
+        </div>
+        {err && <p className="muted">{err}</p>}
+        {items?.length === 0 && <p className="muted">No saved projects yet.</p>}
+        {items?.map((p) => (
+          <div key={p.id} className="row" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
+            <b style={{ flex: 1 }}>{p.name}{p.id === current && <span className="muted small"> (open)</span>}</b>
+            <span className="small muted">{new Date(p.updatedAt * 1000).toLocaleString()}</span>
+            <button onClick={() => open(p.id)}>Open</button>
+            <button className="danger" disabled={p.id === current} onClick={async () => { if (confirm(`Delete "${p.name}"?`)) { await deleteProject(p.id); refresh() } }}>Delete</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

@@ -484,6 +484,7 @@ export default function Editor2D() {
               <text y={4 * px} fontSize={10 * px} textAnchor="middle" fill="#fff" fontWeight={700}>360</text>
             </g>
           ))}
+        <CompareGhost px={px} />
         <SelectionHandles px={px} />
         {/* drafts */}
         {draft.length > 0 && (
@@ -717,4 +718,21 @@ function SelectionHandles({ px }: { px: number }) {
     return <g data-export="skip">{H(p, 'rot', f.id, '#27ae60')}</g>
   }
   return null
+}
+
+function CompareGhost({ px }: { px: number }) {
+  const compare = useStore((s) => s.compareWith)
+  const versions = useStore((s) => s.versions)
+  const v = versions.find((x) => x.id === compare)
+  if (!v) return null
+  return (
+    <g style={{ pointerEvents: 'none' }} data-export="skip">
+      {v.plan.walls.map((w) => (
+        <polygon key={w.id} points={wallCorners(w).map((p) => p.join(',')).join(' ')} fill="#eb5757" fillOpacity={0.18} stroke="#eb5757" strokeWidth={1.5 * px} strokeDasharray={`${5 * px} ${3 * px}`} />
+      ))}
+      {v.plan.furniture.map((f) => (
+        <rect key={f.id} x={-f.width / 2} y={-f.depth / 2} width={f.width} height={f.depth} transform={`translate(${f.x} ${f.y}) rotate(${f.rotation})`} fill="none" stroke="#eb5757" strokeWidth={1.2 * px} strokeDasharray={`${4 * px} ${3 * px}`} />
+      ))}
+    </g>
+  )
 }
