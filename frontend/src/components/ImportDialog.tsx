@@ -12,12 +12,13 @@ export default function ImportDialog({ onClose, onSample }: { onClose: () => voi
   const [over, setOver] = useState(false)
   const [mode, setMode] = useState<'replace' | 'add'>('replace')
   const hasPlan = useStore((s) => s.plan.walls.length > 0)
+  const planScale = useStore((s) => s.plan.settings.scale)
 
   async function run(file: File) {
     setBusy(true)
     setErr('')
     try {
-      const res = await importFile(file, kind, scale ? +scale : undefined)
+      const res = await importFile(file, kind, kind === 'general' ? (scale ? +scale : undefined) : planScale)
       apply(res, file.name)
       onClose()
     } catch (e) {
