@@ -137,6 +137,10 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
             continue
           }
           while (running.size >= AI_PARALLEL) await Promise.race(running)
+          if (cancel.current || !alive.current) {
+            patchResult(it.id, { ai: 'error', error: 'Stopped' })
+            continue
+          }
           const p = photo(it.id, it.shot, it.blob).finally(() => running.delete(p))
           running.add(p)
           queue.push(p)
