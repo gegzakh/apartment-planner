@@ -170,7 +170,8 @@ export async function exportGLB(): Promise<Blob> {
   const exporter = new GLTFExporter()
   const root = new THREE.Group()
   scene.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh && o.visible && !(o as THREE.Mesh).geometry.type.startsWith('Plane')) {
+    const mesh = o as THREE.Mesh
+    if (mesh.isMesh && o.visible && !mesh.geometry.type.startsWith('Plane') && !(mesh.material as THREE.ShaderMaterial).isShaderMaterial) {
       const m = o as THREE.Mesh
       const c = new THREE.Mesh(m.geometry, m.material)
       m.updateWorldMatrix(true, false)
