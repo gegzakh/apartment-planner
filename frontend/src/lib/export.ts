@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import { planBounds, polygonArea } from './geometry'
+import { panoPoint, planBounds, polygonArea } from './geometry'
 import { useStore } from './store'
 import { threeRef } from './three-ref'
 
@@ -116,11 +116,16 @@ export async function render360(width = 4096): Promise<Blob> {
   const size = width / 4
   const cubeRT = new THREE.WebGLCubeRenderTarget(size, { generateMipmaps: false })
   const cubeCam = new THREE.CubeCamera(0.05, 1000, cubeRT)
-  cubeCam.position.copy(camera.position)
+  const st = useStore.getState()
+  if (st.mode3d === 'orbit') {
+    const p = panoPoint(st.plan, st.activeViewpoint)
+    cubeCam.position.set(p.x, p.z, p.y)
+  } else cubeCam.position.copy(camera.position)
   const hidden: THREE.Object3D[] = []
+  scene.traverse((o) => { if (o.name === 'ceiling' && !o.visible) { o.visible = true; hidden.push(o) } })
   scene.updateMatrixWorld()
   cubeCam.update(gl, scene)
-  hidden.forEach((o) => (o.visible = true))
+  hidden.forEach((o) => (o.visible = false))
 
   const H = width / 2
   const rt = new THREE.WebGLRenderTarget(width, H, { colorSpace: THREE.SRGBColorSpace })

@@ -165,3 +165,15 @@ export function rotate(p: Vec2, deg: number): Vec2 {
   const s = Math.sin(r)
   return [p[0] * c - p[1] * s, p[0] * s + p[1] * c]
 }
+
+export function panoPoint(plan: Plan, activeVp: string | null): { x: number; y: number; z: number } {
+  const vp = plan.viewpoints.find((v) => v.id === activeVp) ?? plan.viewpoints[0]
+  if (vp) return { x: vp.x, y: vp.y, z: vp.z }
+  const big = [...plan.rooms].sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon))[0]
+  if (big) {
+    const [x, y] = labelPoint(big.polygon)
+    return { x, y, z: 1.6 }
+  }
+  const b = planBounds(plan)
+  return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, z: 1.6 }
+}

@@ -4,7 +4,7 @@ import { uid } from '../lib/geometry'
 import { useStore } from '../lib/store'
 import type { Overlay, Plan } from '../lib/types'
 
-export default function ImportDialog({ onClose }: { onClose: () => void }) {
+export default function ImportDialog({ onClose, onSample }: { onClose: () => void; onSample?: () => void }) {
   const [kind, setKind] = useState<Overlay['kind']>('general')
   const [scale, setScale] = useState('')
   const [busy, setBusy] = useState(false)
@@ -113,6 +113,9 @@ export default function ImportDialog({ onClose }: { onClose: () => void }) {
           <input id="import-file" type="file" accept=".pdf,.png,.jpg,.jpeg" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) run(f); e.target.value = '' }} />
         </div>
         {err && <p style={{ color: 'var(--danger)' }}>{err}</p>}
+        {onSample && !hasPlan && (
+          <p className="small muted">No plan yet? <button className="ghost" onClick={() => { onClose(); onSample() }}>Try the sample apartment</button></p>
+        )}
       </div>
     </div>
   )

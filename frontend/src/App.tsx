@@ -181,7 +181,7 @@ export default function App() {
         </div>
         <RightPanel />
       </div>
-      {dialog === 'import' && <ImportDialog onClose={() => setDialog(null)} />}
+      {dialog === 'import' && <ImportDialog onClose={() => setDialog(null)} onSample={loadSample} />}
       {dialog === 'export' && <ExportDialog onClose={() => setDialog(null)} />}
       {dialog === 'json' && <JsonDialog onClose={() => setDialog(null)} />}
       {dialog === 'projects' && (

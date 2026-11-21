@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { ELECTRICAL_BY_TYPE, FLOOR_BY_KEY, PLUMBING_BY_TYPE, RUN_STYLE } from '../lib/catalog'
-import { add, mul, planBounds, pointInPolygon, polygonCentroid, wallFrame } from '../lib/geometry'
+import { add, mul, planBounds, pointInPolygon, panoPoint, wallFrame } from '../lib/geometry'
 import { useStore } from '../lib/store'
 import { floorTexture } from '../lib/textures'
 import { threeRef } from '../lib/three-ref'
@@ -170,14 +170,14 @@ function FloorMesh({ r, plan, selected }: { r: Room; plan: Plan; selected: boole
   )
 }
 
-function CeilingMesh({ r, h }: { r: Room; h: number }) {
+function CeilingMesh({ r, h, visible }: { r: Room; h: number; visible: boolean }) {
   const geo = useMemo(() => {
     const g = new THREE.ShapeGeometry(shapeOf(r.polygon))
     g.rotateX(Math.PI / 2)
     return g
   }, [r.polygon])
   return (
-    <mesh geometry={geo} position={[0, h, 0]}>
+    <mesh geometry={geo} position={[0, h, 0]} name="ceiling" visible={visible}>
       <meshStandardMaterial color={r.ceilingColor ?? '#fafafa'} side={THREE.DoubleSide} roughness={1} />
     </mesh>
   )
@@ -372,13 +372,10 @@ export function SceneContent() {
     return m
   }, [plan.openings, layers.openings])
 
-  const vp = plan.viewpoints.find((v) => v.id === activeVp) ?? plan.viewpoints[0]
   const vpPos = useMemo(() => {
-    if (vp) return new THREE.Vector3(vp.x, vp.z, vp.y)
-    const big = [...plan.rooms].sort((a, b) => b.polygon.length - a.polygon.length)[0]
-    const c = big ? polygonCentroid(big.polygon) : [center.x, center.z]
-    return new THREE.Vector3(c[0], 1.6, c[1])
-  }, [vp, plan.rooms, center])
+    const p = panoPoint(plan, activeVp)
+    return new THREE.Vector3(p.x, p.z, p.y)
+  }, [plan, activeVp])
 
   const cut = mode === 'orbit' && xray ? 1.1 : Infinity
   const night = lighting === 'night'
@@ -395,7 +392,7 @@ export function SceneContent() {
         <meshStandardMaterial color={night ? '#1a1d25' : '#cfd6cf'} roughness={1} />
       </mesh>
       {layers.rooms && plan.rooms.map((r) => <FloorMesh key={r.id} r={r} plan={plan} selected={selection?.id === r.id} />)}
-      {showCeiling && plan.rooms.map((r) => <CeilingMesh key={r.id} r={r} h={plan.settings.wallHeight} />)}
+      {plan.rooms.map((r) => <CeilingMesh key={r.id} r={r} h={plan.settings.wallHeight} visible={showCeiling} />)}
       {layers.walls && plan.walls.map((w) => (
         <WallMesh key={w.id} w={w} plan={plan} openings={byWall[w.id] ?? []} selected={selection?.id === w.id} cut={cut} />
       ))}
