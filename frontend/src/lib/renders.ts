@@ -106,8 +106,9 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r(null)))
 export async function renderShots(shots: Shot[], w: number, h: number, onShot: (s: Shot, blob: Blob) => void, cancelled = () => false) {
   const st = useStore.getState()
   const hadXray = st.xray
-  if (hadXray) {
-    st.set({ xray: false })
+  const sel = st.selection
+  if (hadXray || sel) {
+    st.set({ xray: false, selection: null })
     await nextFrame()
     await nextFrame()
   }
@@ -158,5 +159,6 @@ export async function renderShots(shots: Shot[], w: number, h: number, onShot: (
     gl.setPixelRatio(oldRatio)
     gl.setSize(oldSize.x, oldSize.y, false)
     if (hadXray) useStore.getState().set({ xray: true })
+    if (sel && !useStore.getState().selection) useStore.getState().set({ selection: sel })
   }
 }
