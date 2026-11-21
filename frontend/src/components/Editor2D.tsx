@@ -290,7 +290,7 @@ export default function Editor2D() {
       d.runs.forEach((r) => (r.points = r.points.map(S)))
       d.viewpoints.forEach((v) => ([v.x, v.y] = S([v.x, v.y])))
       d.overlays.forEach((o) => { [o.x, o.y] = S([o.x, o.y]); o.width *= f; o.height *= f })
-      if (d.settings.scale) d.settings.scale = Math.round(d.settings.scale / f)
+      if (d.settings.scale) d.settings.scale = Math.max(1, Math.round(d.settings.scale * f))
     })
   }
 
