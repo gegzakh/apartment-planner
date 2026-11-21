@@ -170,7 +170,7 @@ function FloorMesh({ r, plan, selected }: { r: Room; plan: Plan; selected: boole
   const tex = useMemo(() => floorTexture(fd.pattern, r.floorColor ?? fd.color), [fd, r.floorColor])
   return (
     <mesh geometry={geo} position={[0, 0.002, 0]} receiveShadow onClick={onSel('room', r.id)}>
-      {r.floorMat && !selected ? (
+      {r.floorMat ? (
         <primitive object={getMaterial(r.floorMat, '#c49a6c', { side: THREE.DoubleSide })} attach="material" />
       ) : (
         <meshStandardMaterial map={tex} color={selected ? '#bcd6fb' : '#ffffff'} roughness={0.75} side={THREE.DoubleSide} />
