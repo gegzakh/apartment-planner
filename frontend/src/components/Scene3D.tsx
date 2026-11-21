@@ -212,7 +212,7 @@ function FixtureMesh({ f, kind, plan, night }: { f: Fixture; kind: 'electrical' 
       <group position={[f.x, ceil - 0.02, f.y]} onClick={onSel(kind, f.id)}>
         <mesh>
           <cylinderGeometry args={[r, r, 0.04, 24]} />
-          <meshStandardMaterial color={f.type === 'smoke' ? '#fff' : '#fffbe6'} emissive={isCeilingLight ? '#ffe7a8' : '#000'} emissiveIntensity={night ? 2 : 0.4} />
+          <meshStandardMaterial color={f.color ?? (f.type === 'smoke' ? '#fff' : '#fffbe6')} emissive={isCeilingLight ? '#ffe7a8' : '#000'} emissiveIntensity={night ? 2 : 0.4} />
         </mesh>
         {selected && (
           <mesh>
