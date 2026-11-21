@@ -6,7 +6,7 @@ import JsonDialog from './components/JsonDialog'
 import LeftPanel from './components/LeftPanel'
 import RightPanel from './components/RightPanel'
 import { deleteProject, importFile, listProjects, loadProject, saveProject } from './lib/api'
-import { emptyPlan, useStore } from './lib/store'
+import { emptyPlan, useStore, type Version } from './lib/store'
 import type { Plan } from './lib/types'
 
 const Scene3D = lazy(() => import('./components/Scene3D'))
@@ -36,17 +36,22 @@ export default function App() {
   // ---- load last project ----
   useEffect(() => {
     const id = localStorage.getItem('ap:project') || 'default'
+    const local = readBackup(id)
+    const unsynced = !!local && localStorage.getItem(unsyncedKey(id)) === '1'
+    const fromLocal = (serverVersions?: Version[]) =>
+      set({ projectId: id, plan: normalize(local!.plan), versions: local!.versions?.length ? local!.versions : serverVersions ?? [], past: [], future: [], dirty: unsynced })
     loadProject(id)
       .then((doc) => {
-        set({ projectId: id, plan: normalize(doc.plan), versions: doc.versions ?? [], past: [], future: [], dirty: false })
+        loaded.current = true
+        if (unsynced) fromLocal(doc.versions)
+        else set({ projectId: id, plan: normalize(doc.plan), versions: doc.versions ?? [], past: [], future: [], dirty: false })
         window.dispatchEvent(new Event('plan:fit'))
       })
       .catch(() => {
-        const local = localStorage.getItem(`ap:plan:${id}`)
-        if (local) set({ projectId: id, plan: normalize(JSON.parse(local)), dirty: false })
+        loaded.current = true
+        if (local) fromLocal()
         else setDialog('import')
       })
-      .finally(() => (loaded.current = true))
   }, [set])
 
   // ---- autosave ----
@@ -54,19 +59,11 @@ export default function App() {
     if (!dirty || !loaded.current) return
     setSaved('saving')
     const t = setTimeout(async () => {
-      const st = useStore.getState()
-      localStorage.setItem(`ap:plan:${st.projectId}`, JSON.stringify(st.plan))
-      localStorage.setItem('ap:project', st.projectId)
-      try {
-        await saveProject(st.projectId, { name: st.plan.name, plan: st.plan, versions: st.versions })
-        set({ dirty: false })
-        setSaved('saved')
-      } catch {
-        setSaved('offline')
-      }
+      const ok = await persist()
+      setSaved(!ok ? 'offline' : useStore.getState().dirty ? 'saving' : 'saved')
     }, 1200)
     return () => clearTimeout(t)
-  }, [dirty, plan, set])
+  }, [dirty, plan])
 
   // ---- shortcuts ----
   useEffect(() => {
@@ -106,6 +103,7 @@ export default function App() {
   }
 
   async function newProject() {
+    if (useStore.getState().dirty) await persist()
     const id = `p${Date.now().toString(36)}`
     set({ projectId: id, plan: emptyPlan(), versions: [], past: [], future: [], selection: null, dirty: true })
     localStorage.setItem('ap:project', id)
@@ -192,12 +190,45 @@ export default function App() {
   )
 }
 
+const backupKey = (id: string) => `ap:plan:${id}`
+const unsyncedKey = (id: string) => `ap:unsynced:${id}`
+
+function readBackup(id: string): { plan: Plan; versions?: Version[] } | null {
+  try {
+    const d = JSON.parse(localStorage.getItem(backupKey(id)) ?? 'null')
+    if (!d) return null
+    return d.plan ? d : { plan: d }
+  } catch {
+    return null
+  }
+}
+
+/** Writes the current project to browser storage, then to the server. Returns false when offline. */
+async function persist(): Promise<boolean> {
+  const { projectId: id, plan, versions } = useStore.getState()
+  localStorage.setItem(backupKey(id), JSON.stringify({ plan, versions }))
+  localStorage.setItem(unsyncedKey(id), '1')
+  localStorage.setItem('ap:project', id)
+  try {
+    await saveProject(id, { name: plan.name, plan, versions })
+  } catch {
+    return false
+  }
+  const now = useStore.getState()
+  if (now.projectId === id && now.plan === plan && now.versions === versions) {
+    localStorage.removeItem(unsyncedKey(id))
+    now.set({ dirty: false })
+  }
+  return true
+}
+
 function ProjectsDialog({ current, onClose, onNew, onSample }: { current: string; onClose: () => void; onNew: () => void; onSample: () => void }) {
   const [items, setItems] = useState<{ id: string; name: string; updatedAt: number }[] | null>(null)
   const [err, setErr] = useState('')
   const refresh = () => listProjects().then(setItems).catch((e) => setErr(e.message))
   useEffect(() => { refresh() }, [])
   async function open(id: string) {
+    if (useStore.getState().dirty) await persist()
     const doc = await loadProject(id)
     useStore.getState().set({ projectId: id, plan: normalize(doc.plan), versions: doc.versions ?? [], past: [], future: [], selection: null, dirty: false, compareWith: null })
     localStorage.setItem('ap:project', id)
