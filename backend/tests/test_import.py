@@ -46,3 +46,19 @@ def test_rejects_unknown_file():
     client = TestClient(app)
     r = client.post("/api/import", files={"file": ("x.txt", b"hello", "text/plain")})
     assert r.status_code == 400
+
+
+def test_rejects_oversized_inputs():
+    import cv2
+    import numpy as np
+    import pymupdf
+
+
+    client = TestClient(app)
+    doc = pymupdf.open()
+    doc.new_page(width=14000, height=14000)
+    r = client.post("/api/import", files={"file": ("big.pdf", doc.tobytes(), "application/pdf")})
+    assert r.status_code == 400
+    ok, png = cv2.imencode(".png", np.zeros((9000, 9000), np.uint8))
+    r = client.post("/api/import", files={"file": ("big.png", png.tobytes(), "image/png")})
+    assert r.status_code == 400

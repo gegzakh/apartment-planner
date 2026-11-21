@@ -8,6 +8,8 @@ import time
 import uuid
 from pathlib import Path
 
+os.environ.setdefault("OPENCV_IO_MAX_IMAGE_PIXELS", str(60_000_000))
+
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +41,22 @@ def health():
     return {"ok": True}
 
 
+MAX_PAGE_AREA_PT2 = 10_000_000  # a bit larger than A0 (3370 x 2384 pt)
+MAX_PAGE_SIDE_PT = 5000
+
+
+def _check_pdf_size(data: bytes, page_index: int = 0) -> None:
+    import pymupdf
+
+    try:
+        doc = pymupdf.open(stream=data, filetype="pdf")
+        r = doc[page_index].rect
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"Cannot read PDF: {exc}") from exc
+    if max(r.width, r.height) > MAX_PAGE_SIDE_PT or r.width * r.height > MAX_PAGE_AREA_PT2:
+        raise HTTPException(400, "PDF page is too large (max A0)")
+
+
 @app.post("/api/import")
 async def import_plan(
     file: UploadFile = File(...),
@@ -53,6 +71,7 @@ async def import_plan(
     fid = uuid.uuid4().hex[:16]
     is_pdf = data[:5] == b"%PDF-" or name.endswith(".pdf")
     if is_pdf:
+        _check_pdf_size(data)
         (FILES / f"{fid}.pdf").write_bytes(data)
         try:
             png = render_overlay_png(data)
@@ -82,9 +101,12 @@ async def import_plan(
         import cv2
         import numpy as np
 
-        img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+        try:
+            img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
+        except cv2.error:
+            img = None
         if img is None:
-            raise HTTPException(400, "Unsupported image")
+            raise HTTPException(400, "Unsupported or too large image (max 60 megapixels)")
         h, w = img.shape[:2]
         width_m = 10.0
         return {"overlayUrl": f"/api/files/{fid}.{ext}", "kind": kind, "detected": False,
