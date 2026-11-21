@@ -108,7 +108,7 @@ export default function App() {
   }
 
   async function newProject() {
-    if (useStore.getState().dirty) await persist()
+    if (!(await flushBeforeSwitch())) return
     const id = `p${Date.now().toString(36)}`
     set({ projectId: id, plan: emptyPlan(), versions: [], past: [], future: [], selection: null, dirty: true })
     localStorage.setItem('ap:project', id)
@@ -210,15 +210,22 @@ function readBackup(id: string): { plan: Plan; versions?: Version[] } | null {
 }
 
 /** Writes the current project to browser storage, then to the server. Returns false when offline. */
-function backup() {
+function backup(): boolean {
   const { projectId: id, plan, versions } = useStore.getState()
   try {
     localStorage.setItem('ap:project', id)
     localStorage.setItem(backupKey(id), JSON.stringify({ plan, versions }))
     localStorage.setItem(unsyncedKey(id), '1')
+    return true
   } catch {
-    // storage full: the server save still runs
+    return false
   }
+}
+
+/** Saves pending edits before the current plan is replaced; asks the user if they cannot be kept anywhere. */
+async function flushBeforeSwitch(): Promise<boolean> {
+  if (!useStore.getState().dirty || (await persist()) || backup()) return true
+  return window.confirm('Your latest changes could not be saved (offline and browser storage is full). Discard them and continue?')
 }
 
 async function persist(): Promise<boolean> {
@@ -243,7 +250,7 @@ function ProjectsDialog({ current, onClose, onNew, onSample }: { current: string
   const refresh = () => listProjects().then(setItems).catch((e) => setErr(e.message))
   useEffect(() => { refresh() }, [])
   async function open(id: string) {
-    if (useStore.getState().dirty) await persist()
+    if (!(await flushBeforeSwitch())) return
     const doc = await loadProject(id)
     useStore.getState().set({ projectId: id, plan: normalize(doc.plan), versions: doc.versions ?? [], past: [], future: [], selection: null, dirty: false, compareWith: null })
     localStorage.setItem('ap:project', id)
