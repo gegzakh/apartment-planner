@@ -1,3 +1,11 @@
+/** A surface finish: catalogue finish key, optional tint, optional uploaded texture (data URL) and its repeat size in metres. */
+export interface MaterialSpec {
+  finish?: string
+  color?: string
+  texture?: string
+  scale?: number
+}
+
 export type Vec2 = [number, number]
 
 export interface Wall {
@@ -7,6 +15,8 @@ export interface Wall {
   thickness: number
   height?: number
   color?: string
+  /** Overrides the room finish on both faces. */
+  mat?: MaterialSpec
 }
 
 export type OpeningType = 'door' | 'window' | 'opening'
@@ -24,6 +34,8 @@ export interface Opening {
   /** +1 opens to the wall's left-normal side, -1 to the other */
   swing?: 1 | -1
   color?: string
+  /** Door leaf / window frame finish. */
+  mat?: MaterialSpec
 }
 
 export interface Room {
@@ -34,6 +46,10 @@ export interface Room {
   floorColor?: string
   wallColor?: string
   ceilingColor?: string
+  style?: string
+  floorMat?: MaterialSpec
+  wallMat?: MaterialSpec
+  ceilingMat?: MaterialSpec
 }
 
 export interface Furniture {
@@ -47,6 +63,10 @@ export interface Furniture {
   height: number
   elevation?: number
   color?: string
+  /** Main finish (upholstery / body). */
+  mat?: MaterialSpec
+  /** Secondary finish (frame, legs, fronts). */
+  mat2?: MaterialSpec
   label?: string
   /** SVG path in local metres, centred on the item (from imported drawings) */
   outline?: string
@@ -61,6 +81,7 @@ export interface Fixture {
   /** mounting height above floor in metres */
   z: number
   circuit?: string
+  color?: string
   label?: string
 }
 

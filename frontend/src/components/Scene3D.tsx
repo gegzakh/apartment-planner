@@ -2,9 +2,11 @@ import { ContactShadows, OrbitControls, PointerLockControls, Sky } from '@react-
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { ELECTRICAL_BY_TYPE, FLOOR_BY_KEY, PLUMBING_BY_TYPE, RUN_STYLE } from '../lib/catalog'
 import { add, mul, planBounds, pointInPolygon, panoPoint, wallFrame } from '../lib/geometry'
 import { useStore } from '../lib/store'
+import { getMaterial } from '../lib/materials'
 import { floorTexture } from '../lib/textures'
 import { threeRef } from '../lib/three-ref'
 import type { EntityKind, Fixture, Opening, Plan, Room, Run, Wall } from '../lib/types'
@@ -29,23 +31,26 @@ function sideColor(plan: Plan, w: Wall, side: 1 | -1) {
   const mid = add(w.a, mul(u, L / 2))
   const p = add(mid, mul(n, side * (w.thickness / 2 + 0.08)))
   const r = plan.rooms.find((r) => pointInPolygon(p, r.polygon))
-  return w.color ?? r?.wallColor ?? plan.settings.defaultWallColor
+  const color = w.color ?? r?.wallColor ?? plan.settings.defaultWallColor
+  return { spec: w.mat ?? (w.color ? undefined : r?.wallMat), color }
 }
+
+const SEL_MAT = new THREE.MeshStandardMaterial({ color: SEL, roughness: 0.9 })
+const TOP_MAT = new THREE.MeshStandardMaterial({ color: '#4a4d52', roughness: 1 })
 
 function WallMesh({ w, plan, openings, selected, cut }: { w: Wall; plan: Plan; openings: Opening[]; selected: boolean; cut: number }) {
   const onSel = useSelect()
   const H = Math.min(w.height ?? plan.settings.wallHeight, cut)
   const { L, angle } = wallFrame(w)
   const t = w.thickness
-  const colL = sideColor(plan, w, 1)
-  const colR = sideColor(plan, w, -1)
-  const mats = useMemo(() => {
-    const m = (c: string) => new THREE.MeshStandardMaterial({ color: selected ? SEL : c, roughness: 0.9 })
-    const top = new THREE.MeshStandardMaterial({ color: selected ? SEL : '#4a4d52', roughness: 1 })
-    const side = m(colL)
+  const sL = sideColor(plan, w, 1)
+  const sR = sideColor(plan, w, -1)
+  const matsFor = (len: number, hh: number) => {
+    if (selected) return SEL_MAT
+    const end = getMaterial(sL.spec, sL.color, { faceSize: [t, hh] })
     // box face order: +x, -x, +y, -y, +z, -z
-    return [side, side, top, side, m(colL), m(colR)]
-  }, [colL, colR, selected])
+    return [end, end, TOP_MAT, end, getMaterial(sL.spec, sL.color, { faceSize: [len, hh] }), getMaterial(sR.spec, sR.color, { faceSize: [len, hh] })]
+  }
 
   const pieces = useMemo(() => {
     const ops = openings
@@ -72,7 +77,7 @@ function WallMesh({ w, plan, openings, selected, cut }: { w: Wall; plan: Plan; o
         const x0 = p.x0 === 0 ? -ext : p.x0
         const x1 = Math.abs(p.x1 - L) < 1e-6 ? L + ext : p.x1
         return (
-          <mesh key={i} position={[(x0 + x1) / 2, (p.y0 + p.y1) / 2, 0]} material={mats} castShadow receiveShadow>
+          <mesh key={i} position={[(x0 + x1) / 2, (p.y0 + p.y1) / 2, 0]} material={matsFor(x1 - x0, p.y1 - p.y0)} castShadow receiveShadow>
             <boxGeometry args={[x1 - x0, p.y1 - p.y0, t]} />
           </mesh>
         )
@@ -87,7 +92,7 @@ function WallMesh({ w, plan, openings, selected, cut }: { w: Wall; plan: Plan; o
 function OpeningMesh({ o, t, H }: { o: Opening; t: number; H: number }) {
   const onSel = useSelect()
   const selected = useStore((s) => s.selection?.id === o.id)
-  const frame = selected ? SEL : o.color ?? '#f5f5f5'
+  const frame = selected ? SEL : o.mat?.color ?? o.color ?? '#f5f5f5'
   const hw = o.width / 2
   if (o.type === 'window') {
     const top = Math.min(o.sill + o.height, H)
@@ -123,7 +128,7 @@ function OpeningMesh({ o, t, H }: { o: Opening; t: number; H: number }) {
         <group position={[hingeX, 0, (s * t) / 2]} rotation={[0, phi, 0]}>
           <mesh position={[(dir * o.width) / 2, h / 2, 0]} castShadow>
             <boxGeometry args={[o.width - 0.02, h, 0.04]} />
-            <meshStandardMaterial color={selected ? SEL : o.color ?? '#e9e3d8'} roughness={0.6} />
+            {selected ? <meshStandardMaterial color={SEL} /> : <primitive object={getMaterial(o.mat, o.color ?? '#e9e3d8', { faceSize: [o.width, h], fallbackFinish: 'lacquer_matte' })} attach="material" />}
           </mesh>
           <mesh position={[dir * (o.width - 0.1), 1.0, 0.04]}>
             <boxGeometry args={[0.12, 0.02, 0.02]} />
@@ -165,7 +170,11 @@ function FloorMesh({ r, plan, selected }: { r: Room; plan: Plan; selected: boole
   const tex = useMemo(() => floorTexture(fd.pattern, r.floorColor ?? fd.color), [fd, r.floorColor])
   return (
     <mesh geometry={geo} position={[0, 0.002, 0]} receiveShadow onClick={onSel('room', r.id)}>
-      <meshStandardMaterial map={tex} color={selected ? '#bcd6fb' : '#ffffff'} roughness={0.75} side={THREE.DoubleSide} />
+      {r.floorMat && !selected ? (
+        <primitive object={getMaterial(r.floorMat, '#c49a6c', { side: THREE.DoubleSide })} attach="material" />
+      ) : (
+        <meshStandardMaterial map={tex} color={selected ? '#bcd6fb' : '#ffffff'} roughness={0.75} side={THREE.DoubleSide} />
+      )}
     </mesh>
   )
 }
@@ -178,7 +187,11 @@ function CeilingMesh({ r, h, visible }: { r: Room; h: number; visible: boolean }
   }, [r.polygon])
   return (
     <mesh geometry={geo} position={[0, h, 0]} name="ceiling" visible={visible}>
-      <meshStandardMaterial color={r.ceilingColor ?? '#fafafa'} side={THREE.DoubleSide} roughness={1} />
+      {r.ceilingMat ? (
+        <primitive object={getMaterial(r.ceilingMat, r.ceilingColor ?? '#fafafa', { side: THREE.DoubleSide })} attach="material" />
+      ) : (
+        <meshStandardMaterial color={r.ceilingColor ?? '#fafafa'} side={THREE.DoubleSide} roughness={1} />
+      )}
     </mesh>
   )
 }
@@ -188,7 +201,7 @@ function FixtureMesh({ f, kind, plan, night }: { f: Fixture; kind: 'electrical' 
   const onSel = useSelect()
   const selected = useStore((s) => s.selection?.id === f.id)
   const def = (kind === 'electrical' ? ELECTRICAL_BY_TYPE : PLUMBING_BY_TYPE)[f.type]
-  const color = selected ? SEL : def?.color ?? '#888'
+  const color = selected ? SEL : f.color ?? def?.color ?? '#888'
   const ceil = plan.settings.wallHeight
   const z = Math.min(f.z, ceil)
   const rot = (-f.rotation * Math.PI) / 180
@@ -219,7 +232,7 @@ function FixtureMesh({ f, kind, plan, night }: { f: Fixture; kind: 'electrical' 
       <mesh position={[-size[0] / 2 + 0.01, 0, 0]} castShadow>
         {f.type === 'riser' ? <cylinderGeometry args={[0.055, 0.055, ceil, 16]} /> : <boxGeometry args={size} />}
         <meshStandardMaterial
-          color={f.type === 'radiator' || f.type === 'ac' || f.type === 'boiler' ? (selected ? SEL : '#f4f4f4') : color}
+          color={f.type === 'radiator' || f.type === 'ac' || f.type === 'boiler' ? (selected ? SEL : f.color ?? '#f4f4f4') : color}
           emissive={f.type.includes('light') || f.type === 'led_strip' ? '#ffd27a' : '#000'}
           emissiveIntensity={night ? 2 : 0.3}
         />
@@ -423,9 +436,14 @@ export default function Scene3D() {
         dpr={[1, 2]}
         gl={{ preserveDrawingBuffer: true, antialias: true }}
         camera={{ fov: 45, near: 0.05, far: 2000, position: [10, 10, 10] }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, scene }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.0
+          gl.shadowMap.type = THREE.PCFSoftShadowMap
+          const pmrem = new THREE.PMREMGenerator(gl)
+          scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+          scene.environmentIntensity = 0.35
+          pmrem.dispose()
         }}
       >
         <SceneContent key={mode} />

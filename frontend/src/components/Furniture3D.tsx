@@ -1,21 +1,43 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import { FURNITURE_BY_TYPE } from '../lib/catalog'
-import type { Furniture } from '../lib/types'
+import { createContext, useContext } from 'react'
+import * as THREE from 'three'
+import { getMaterial } from '../lib/materials'
+import type { Furniture, MaterialSpec } from '../lib/types'
+
+/** Finishes of the piece being drawn: parts drawn in `mainColor` get `main`, other non-neutral parts get `accent`. */
+const Finish = createContext<{ mainColor: string; main?: MaterialSpec; accent?: MaterialSpec }>({ mainColor: '' })
+
+function isNeutral(c: string) {
+  const l = new THREE.Color(c).getHSL({ h: 0, s: 0, l: 0 }).l
+  return l > 0.88 || l < 0.12
+}
+
+function useFinish(c: string, face: [number, number], r?: number, m?: number) {
+  const f = useContext(Finish)
+  if (c === f.mainColor && f.main) return getMaterial(f.main, c, { faceSize: face })
+  if (c !== f.mainColor && f.accent && !isNeutral(c)) return getMaterial(f.accent, c, { faceSize: face })
+  void r
+  void m
+  return null
+}
 
 interface BoxProps { p: [number, number, number]; s: [number, number, number]; c: string; r?: number; m?: number }
-function B({ p, s, c, r = 0.7, m = 0 }: BoxProps) {
+function B({ p, s, c, r, m = 0 }: BoxProps) {
+  const mat = useFinish(c, [Math.max(s[0], s[2]), s[1]], r, m)
   return (
     <mesh position={p} castShadow receiveShadow>
       <boxGeometry args={s} />
-      <meshStandardMaterial color={c} roughness={r} metalness={m} />
+      {mat ? <primitive object={mat} attach="material" /> : <meshStandardMaterial color={c} roughness={r ?? 0.7} metalness={m} />}
     </mesh>
   )
 }
 function Cyl({ p, rt, rb, h, c, seg = 24 }: { p: [number, number, number]; rt: number; rb: number; h: number; c: string; seg?: number }) {
+  const mat = useFinish(c, [Math.PI * rb, h], 0.6)
   return (
     <mesh position={p} castShadow receiveShadow>
       <cylinderGeometry args={[rt, rb, h, seg]} />
-      <meshStandardMaterial color={c} roughness={0.6} />
+      {mat ? <primitive object={mat} attach="material" /> : <meshStandardMaterial color={c} roughness={0.6} />}
     </mesh>
   )
 }
@@ -28,7 +50,7 @@ function legs(w: number, d: number, h: number, c: string, inset = 0.05, t = 0.04
 
 function Body({ f }: { f: Furniture }) {
   const w = f.width, d = f.depth, h = f.height
-  const c = f.color ?? FURNITURE_BY_TYPE[f.type]?.color ?? '#bbb'
+  const c = f.mat?.color ?? f.color ?? FURNITURE_BY_TYPE[f.type]?.color ?? '#bbb'
   switch (f.type) {
     case 'bed':
     case 'bed_single':
@@ -187,7 +209,9 @@ function Body({ f }: { f: Furniture }) {
 export default function Furniture3D({ f, selected, onSelect }: { f: Furniture; selected: boolean; onSelect: (e: ThreeEvent<MouseEvent>) => void }) {
   return (
     <group position={[f.x, f.elevation && f.type !== 'generic' ? f.elevation : 0, f.y]} rotation={[0, (-f.rotation * Math.PI) / 180, 0]} onClick={onSelect}>
-      <Body f={f} />
+      <Finish.Provider value={{ mainColor: f.mat?.color ?? f.color ?? FURNITURE_BY_TYPE[f.type]?.color ?? '#bbb', main: f.mat, accent: f.mat2 }}>
+        <Body f={f} />
+      </Finish.Provider>
       {selected && (
         <mesh position={[0, f.height / 2, 0]}>
           <boxGeometry args={[f.width + 0.04, f.height + 0.04, f.depth + 0.04]} />

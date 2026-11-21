@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import Editor2D from './components/Editor2D'
 import ExportDialog from './components/ExportDialog'
+import RenderDialog from './components/RenderDialog'
 import ImportDialog from './components/ImportDialog'
 import JsonDialog from './components/JsonDialog'
 import LeftPanel from './components/LeftPanel'
@@ -29,7 +30,7 @@ export default function App() {
   const dirty = useStore((s) => s.dirty)
   const activeVp = useStore((s) => s.activeViewpoint)
   const { set, undo, redo, update } = useStore.getState()
-  const [dialog, setDialog] = useState<null | 'import' | 'export' | 'json' | 'projects'>(null)
+  const [dialog, setDialog] = useState<null | 'import' | 'export' | 'json' | 'projects' | 'renders'>(null)
   const [saved, setSaved] = useState<'saved' | 'saving' | 'offline'>('saved')
   const loaded = useRef(false)
   const [toolsOpen, setToolsOpen] = useState(false)
@@ -38,6 +39,27 @@ export default function App() {
   useEffect(() => setToolsOpen(false), [tool, toolArg])
 
   // ---- load last project ----
+  // Browser zoom (pinch, Ctrl+wheel, Ctrl +/-) would scale the side panels too; route it to the plan instead.
+  useEffect(() => {
+    const wheel = (e: WheelEvent) => e.ctrlKey && e.preventDefault()
+    const gesture = (e: Event) => e.preventDefault()
+    const key = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      const f = e.key === '+' || e.key === '=' ? 1.25 : e.key === '-' ? 0.8 : e.key === '0' ? 0 : null
+      if (f === null) return
+      e.preventDefault()
+      if (f) window.dispatchEvent(new CustomEvent('plan:zoom', { detail: f }))
+      else window.dispatchEvent(new Event('plan:fit'))
+    }
+    window.addEventListener('wheel', wheel, { passive: false })
+    document.addEventListener('gesturestart', gesture)
+    window.addEventListener('keydown', key)
+    return () => {
+      window.removeEventListener('wheel', wheel)
+      document.removeEventListener('gesturestart', gesture)
+      window.removeEventListener('keydown', key)
+    }
+  }, [])
   useEffect(() => {
     const id = localStorage.getItem('ap:project') || 'default'
     const local = readBackup(id)
@@ -137,6 +159,7 @@ export default function App() {
         <span className="spacer" />
         <span className="small muted">{saved === 'saving' ? 'Saving…' : saved === 'offline' ? 'Saved in browser only' : 'All changes saved'}</span>
         <button onClick={() => setDialog('json')}>{'{ } JSON'}</button>
+        <button onClick={() => setDialog('renders')}>📷 Room renders</button>
         <button className="primary" onClick={() => setDialog('export')}>⇪ Download / Share</button>
       </header>
       <div className="main">
@@ -178,7 +201,7 @@ export default function App() {
                     {plan.viewpoints.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                   </select>
                 )}
-                <button onClick={() => setDialog('export')}>📷 Render</button>
+                <button className="primary" onClick={() => setDialog('renders')}>📷 Room renders</button>
               </div>
             </div>
           )}
@@ -187,6 +210,7 @@ export default function App() {
       </div>
       {dialog === 'import' && <ImportDialog onClose={() => setDialog(null)} onSample={loadSample} />}
       {dialog === 'export' && <ExportDialog onClose={() => setDialog(null)} />}
+      {dialog === 'renders' && <RenderDialog onClose={() => setDialog(null)} />}
       {dialog === 'json' && <JsonDialog onClose={() => setDialog(null)} />}
       {dialog === 'projects' && (
         <ProjectsDialog current={projectId} onClose={() => setDialog(null)} onNew={newProject} onSample={loadSample} />

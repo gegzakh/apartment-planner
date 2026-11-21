@@ -704,6 +704,9 @@ def _guess_furniture(w, d):
         return "table", 0.75
     if hi <= 0.6:
         return "chair", 0.85
+    if lo >= 1.2 and lo * hi >= 2.5:
+        # Large outlines without a recognisable footprint are usually rugs or zone markings, not solid blocks.
+        return "rug", 0.01
     return "generic", 0.75
 
 

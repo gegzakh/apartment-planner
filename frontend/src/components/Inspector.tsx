@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { ELECTRICAL, FLOORS, FURNITURE, FURNITURE_BY_TYPE, PLUMBING, ROOM_PRESETS, RUN_STYLE, WALL_COLORS } from '../lib/catalog'
 import { polygonArea, polygonPerimeter, runLength, wallFrame } from '../lib/geometry'
+import { FINISHES, FINISH_BY_KEY, FINISH_GROUPS, finishThumb, textureFromFile } from '../lib/materials'
 import { findEntity, useStore } from '../lib/store'
-import type { Fixture, Furniture, Opening, Overlay, PipeKind, Room, Run, Viewpoint, Wall } from '../lib/types'
+import { ROOM_STYLES, STYLE_BY_KEY, applyStyle } from '../lib/styles'
+import type { MaterialSpec, Fixture, Furniture, Opening, Overlay, PipeKind, Room, Run, Viewpoint, Wall } from '../lib/types'
 
 function Num({ label, value, onChange, step = 0.01, min, max, unit = 'm' }: { label: string; value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; unit?: string }) {
   return (
@@ -23,6 +26,69 @@ function Swatches({ value, onChange, colors = WALL_COLORS }: { value?: string; o
     </div>
   )
 }
+
+/** Finish + colour + texture picker used for every surface and item. */
+function MaterialPicker({ label, value, fallback, groups, onChange }: { label: string; value?: MaterialSpec; fallback: string; groups?: readonly string[]; onChange: (m?: MaterialSpec) => void }) {
+  const [open, setOpen] = useState(false)
+  const def = value?.finish ? FINISH_BY_KEY[value.finish] : undefined
+  const color = value?.color ?? def?.color ?? fallback
+  const list = FINISH_GROUPS.filter((g) => !groups || groups.includes(g))
+  return (
+    <div className="matpick">
+      <div className="matpick-head" onClick={() => setOpen(!open)}>
+        <img src={value?.texture ?? finishThumb(value?.finish ?? 'paint_matte', color)} alt="" />
+        <span className="grow"><b>{label}</b><br /><span className="muted">{value?.texture ? 'Custom texture' : def?.label ?? 'Colour only'}</span></span>
+        <input type="color" value={color} onClick={(e) => e.stopPropagation()} onChange={(e) => onChange({ ...value, color: e.target.value })} title="Colour / tint" />
+        <span className="muted">{open ? '▴' : '▾'}</span>
+      </div>
+      {open && (
+        <>
+          {list.map((g) => (
+            <div key={g}>
+              <div className="matgroup">{g}</div>
+              <div className="matgrid">
+                {FINISHES.filter((f) => f.group === g).map((f) => (
+                  <button key={f.key} title={f.label} className={value?.finish === f.key && !value?.texture ? 'on' : ''} onClick={() => onChange({ finish: f.key })}>
+                    <img src={finishThumb(f.key)} alt={f.label} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="chips" style={{ alignItems: 'center' }}>
+            <label className="small" style={{ cursor: 'pointer' }}>
+              <span className="btnlike">📷 Upload texture photo</span>
+              <input type="file" accept="image/*" hidden onChange={async (e) => {
+                const f = e.target.files?.[0]
+                if (f) onChange({ ...value, texture: await textureFromFile(f), color: undefined, scale: value?.scale ?? 0.6 })
+                e.target.value = ''
+              }} />
+            </label>
+            {value && <button className="ghost small" onClick={() => onChange(undefined)}>reset</button>}
+          </div>
+          {(value?.texture || (def && def.pattern !== 'plain')) && (
+            <label className="row"><span>Pattern size</span>
+              <input type="range" min={0.1} max={3} step={0.05} value={value?.scale ?? 1} onChange={(e) => onChange({ ...value, scale: +e.target.value })} />
+              <span className="muted small" style={{ width: 34 }}>{(value?.scale ?? 1).toFixed(2)}m</span>
+            </label>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function StyleSelect({ value, onChange, placeholder = 'Choose style…' }: { value?: string; onChange: (k: string) => void; placeholder?: string }) {
+  return (
+    <select value={value ?? ''} onChange={(e) => e.target.value && onChange(e.target.value)}>
+      <option value="">{placeholder}</option>
+      {ROOM_STYLES.map((st) => <option key={st.key} value={st.key}>{st.label} — {st.desc}</option>)}
+    </select>
+  )
+}
+
+const WALL_GROUPS = ['Paint & plaster', 'Wallpaper', 'Wood', 'Stone & tile', 'Brick & concrete']
+const FLOOR_GROUPS = ['Wood', 'Stone & tile', 'Brick & concrete', 'Fabric & leather', 'Paint & plaster']
 
 export default function Inspector() {
   const plan = useStore((s) => s.plan)
@@ -63,8 +129,9 @@ export default function Inspector() {
           <Num label="Start X" value={w.a[0]} onChange={(v) => patch<Wall>((x) => (x.a = [v, x.a[1]]))} />
           <Num label="Start Y" value={w.a[1]} onChange={(v) => patch<Wall>((x) => (x.a = [x.a[0], v]))} />
         </div>
-        <div className="row"><span>Colour</span></div>
-        <Swatches value={w.color} onChange={(c) => patch<Wall>((x) => (x.color = c))} />
+        <MaterialPicker label="Wall finish (both sides)" value={w.mat ?? (w.color ? { color: w.color } : undefined)} fallback={plan.settings.defaultWallColor} groups={WALL_GROUPS}
+          onChange={(m) => patch<Wall>((x) => { x.mat = m; x.color = undefined })} />
+        <p className="small muted">Leave unset to use each room's wall finish on its side.</p>
         <p className="small muted">Drag the blue end handles to reshape. Hold Alt to detach from connected walls.</p>
       </div>
     )
@@ -93,6 +160,8 @@ export default function Inspector() {
         )}
         <div className="row"><span>Frame colour</span></div>
         <Swatches value={o.color} onChange={(c) => patch<Opening>((x) => (x.color = c))} colors={['#ffffff', '#e9e3d8', '#a4825a', '#6b4f3a', '#3b3b3b']} />
+        <MaterialPicker label={o.type === 'door' ? 'Door leaf finish' : 'Frame finish'} value={o.mat} fallback={o.color ?? '#e9e3d8'} groups={['Wood', 'Plastic & lacquer', 'Metal & glass']}
+          onChange={(m) => patch<Opening>((x) => (x.mat = m))} />
       </div>
     )
   }
@@ -104,17 +173,22 @@ export default function Inspector() {
         <label className="row"><span>Name</span><input value={r.name} list="room-presets" onChange={(e) => patch<Room>((x) => (x.name = e.target.value))} /></label>
         <datalist id="room-presets">{ROOM_PRESETS.map((p) => <option key={p} value={p} />)}</datalist>
         <p className="small muted">Area <b>{polygonArea(r.polygon).toFixed(2)} m²</b> · perimeter {polygonPerimeter(r.polygon).toFixed(2)} m · wall area ≈ {(polygonPerimeter(r.polygon) * plan.settings.wallHeight).toFixed(1)} m²</p>
-        <label className="row"><span>Floor</span>
+        <label className="row"><span>Style</span>
+          <StyleSelect value={r.style} onChange={(k) => update((d) => { const x = d.rooms.find((q) => q.id === r.id); if (x) applyStyle(d, x, k) })} />
+        </label>
+        {r.style && <p className="small muted">{STYLE_BY_KEY[r.style]?.desc}. Applied to floor, walls, ceiling and the furniture in this room — override anything below.</p>}
+        <MaterialPicker label="Floor" value={r.floorMat} fallback={r.floorColor ?? '#c49a6c'} groups={FLOOR_GROUPS} onChange={(m) => patch<Room>((x) => (x.floorMat = m))} />
+        <MaterialPicker label="Walls" value={r.wallMat ?? (r.wallColor ? { color: r.wallColor } : undefined)} fallback={plan.settings.defaultWallColor} groups={WALL_GROUPS}
+          onChange={(m) => patch<Room>((x) => { x.wallMat = m; x.wallColor = m?.color })} />
+        <MaterialPicker label="Ceiling" value={r.ceilingMat ?? (r.ceilingColor ? { color: r.ceilingColor } : undefined)} fallback="#fafafa" groups={['Paint & plaster', 'Wood', 'Brick & concrete']}
+          onChange={(m) => patch<Room>((x) => { x.ceilingMat = m?.finish || m?.texture ? m : undefined; x.ceilingColor = m?.color })} />
+        {!r.floorMat && <><label className="row"><span>Floor</span>
           <select value={r.floor ?? plan.settings.defaultFloor} onChange={(e) => patch<Room>((x) => { x.floor = e.target.value; x.floorColor = undefined })}>
             {FLOORS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
           </select>
         </label>
         <div className="row"><span>Floor tint</span></div>
-        <Swatches value={r.floorColor} onChange={(c) => patch<Room>((x) => (x.floorColor = c))} colors={FLOORS.map((f) => f.color)} />
-        <div className="row" style={{ marginTop: 8 }}><span>Wall colour</span></div>
-        <Swatches value={r.wallColor} onChange={(c) => patch<Room>((x) => (x.wallColor = c))} />
-        <div className="row" style={{ marginTop: 8 }}><span>Ceiling</span></div>
-        <Swatches value={r.ceilingColor} onChange={(c) => patch<Room>((x) => (x.ceilingColor = c))} colors={['#ffffff', '#f4f1ea', '#e8e4dc', '#2e3a40']} />
+        <Swatches value={r.floorColor} onChange={(c) => patch<Room>((x) => (x.floorColor = c))} colors={FLOORS.map((f) => f.color)} /></>}
       </div>
     )
   }
@@ -140,7 +214,9 @@ export default function Inspector() {
           <button onClick={() => patch<Furniture>((x) => { [x.width, x.depth] = [x.depth, x.width] })}>Swap W/D</button>
         </div>
         <div className="row"><span>Colour</span></div>
-        <Swatches value={f.color} onChange={(c) => patch<Furniture>((x) => (x.color = c))} colors={['#f0ece4', '#d9d2c5', '#a4825a', '#6b4f3a', '#7a8ca3', '#3b3b3b', '#9a7b6a', '#4f8a4b']} />
+        <Swatches value={f.mat?.color ?? f.color} onChange={(c) => patch<Furniture>((x) => { x.color = c; if (x.mat) x.mat = { ...x.mat, color: c } })} colors={['#f0ece4', '#d9d2c5', '#a4825a', '#6b4f3a', '#7a8ca3', '#3b3b3b', '#9a7b6a', '#4f8a4b']} />
+        <MaterialPicker label="Main material" value={f.mat} fallback={f.color ?? FURNITURE_BY_TYPE[f.type]?.color ?? '#bbb'} onChange={(m) => patch<Furniture>((x) => (x.mat = m))} />
+        <MaterialPicker label="Frame / legs / fronts" value={f.mat2} fallback="#6b5444" onChange={(m) => patch<Furniture>((x) => (x.mat2 = m))} />
         <p className="small muted">Drag to move, drag the green handle to rotate (Shift = free).</p>
       </div>
     )
@@ -158,6 +234,8 @@ export default function Inspector() {
         </label>
         <Num label="Height" value={f.z} onChange={(v) => patch<Fixture>((x) => (x.z = v))} />
         <Num label="Rotation" unit="°" step={15} value={f.rotation} onChange={(v) => patch<Fixture>((x) => (x.rotation = v))} />
+        <div className="row"><span>Colour</span></div>
+        <Swatches value={f.color} onChange={(c) => patch<Fixture>((x) => (x.color = c))} colors={['#ffffff', '#f0ece4', '#2b2b2d', '#b8bcc0', '#c9a45c', '#e0a000']} />
         <label className="row"><span>Circuit / note</span><input value={f.circuit ?? ''} placeholder="e.g. C3 kitchen" onChange={(e) => patch<Fixture>((x) => (x.circuit = e.target.value))} /></label>
         <p className="small muted">Points snap to the nearest wall when dragged (hold Shift to place freely).</p>
       </div>
@@ -216,6 +294,9 @@ function PlanSettings() {
   return (
     <div className="section">
       <h4>Apartment</h4>
+      <label className="row"><span>Style all rooms</span>
+        <StyleSelect onChange={(k) => update((d) => d.rooms.forEach((r) => applyStyle(d, r, k)))} />
+      </label>
       <Num label="Ceiling height" value={plan.settings.wallHeight} onChange={(v) => update((d) => (d.settings.wallHeight = v), { coalesce: 'wh' })} />
       <label className="row"><span>Default floor</span>
         <select value={plan.settings.defaultFloor} onChange={(e) => update((d) => (d.settings.defaultFloor = e.target.value))}>

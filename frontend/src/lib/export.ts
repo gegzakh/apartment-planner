@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { FLOOR_BY_KEY } from './catalog'
+import { floorName } from './materials'
 import { panoPoint, planBounds, polygonArea } from './geometry'
 import { useStore } from './store'
 import { threeRef } from './three-ref'
@@ -224,7 +226,7 @@ export async function exportPDF(): Promise<Blob> {
     total += a
     pdf.text(`${r.name}`, 12, y)
     pdf.text(`${a.toFixed(2)} m²`, 90, y)
-    pdf.text(`${r.floor ?? plan.settings.defaultFloor}`, 120, y)
+    pdf.text(floorName(r, plan.settings.defaultFloor, (f) => FLOOR_BY_KEY[f]?.label), 120, y)
     y += 6
   }
   pdf.setFont('helvetica', 'bold')

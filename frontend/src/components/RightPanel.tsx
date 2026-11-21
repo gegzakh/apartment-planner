@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { floorName } from '../lib/materials'
 import { ELECTRICAL_BY_TYPE, FLOOR_BY_KEY, PLUMBING_BY_TYPE, RUN_STYLE } from '../lib/catalog'
 import { polygonArea, polygonPerimeter, runLength, wallFrame } from '../lib/geometry'
 import { ALL_LAYERS, LAYER_PRESETS, useStore } from '../lib/store'
@@ -60,7 +61,7 @@ function Quantities() {
     let paint = 0
     for (const r of plan.rooms) {
       const a = polygonArea(r.polygon)
-      const k = r.floor ?? plan.settings.defaultFloor
+      const k = floorName(r, plan.settings.defaultFloor, (f) => FLOOR_BY_KEY[f]?.label)
       floors[k] = (floors[k] ?? 0) + a
       floorTotal += a
       paint += polygonPerimeter(r.polygon) * H
@@ -88,7 +89,7 @@ function Quantities() {
       <div className="section">
         <h4>Finishes (estimate)</h4>
         <table className="q"><tbody>
-          {Object.entries(q.floors).map(([k, a]) => <tr key={k}><td>{FLOOR_BY_KEY[k]?.label ?? k}</td><td>{a.toFixed(1)} m² (+10% = {(a * 1.1).toFixed(1)})</td></tr>)}
+          {Object.entries(q.floors).map(([k, a]) => <tr key={k}><td>{k}</td><td>{a.toFixed(1)} m² (+10% = {(a * 1.1).toFixed(1)})</td></tr>)}
           <tr><td>Wall paint (2 coats)</td><td>{q.paint.toFixed(1)} m² · ≈{Math.ceil((q.paint * 2) / 10)} L</td></tr>
           <tr><td>Ceiling</td><td>{q.ceiling.toFixed(1)} m²</td></tr>
           <tr><td>Skirting</td><td>{plan.rooms.reduce((s, r) => s + polygonPerimeter(r.polygon), 0).toFixed(1)} m</td></tr>

@@ -3,6 +3,7 @@ import { ELECTRICAL_BY_TYPE, FLOOR_BY_KEY, FURNITURE_BY_TYPE, PLUMBING_BY_TYPE, 
 import {
   add, dist, labelPoint, mul, nearestWall, openingFrame, planBounds, polygonArea, projectOnSegment, snap, sub, uid, wallCorners, wallFrame,
 } from '../lib/geometry'
+import { FINISH_BY_KEY } from '../lib/materials'
 import { useStore } from '../lib/store'
 import type { Fixture, Furniture, Opening, Plan, PipeKind, Vec2, Wall } from '../lib/types'
 
@@ -129,12 +130,36 @@ export default function Editor2D() {
   }
 
   // ---- pointer handlers ----
-  const onWheel = (e: React.WheelEvent) => {
-    const p = toWorld(e)
-    const k = Math.max(5, Math.min(800, view.k * Math.exp(-e.deltaY * 0.0015)))
+  const zoomAt = (factor: number, cx: number, cy: number) => {
     const r = svgRef.current!.getBoundingClientRect()
-    setView({ k, x: p[0] - (e.clientX - r.left) / k, y: p[1] - (e.clientY - r.top) / k })
+    const p = toWorld({ clientX: cx, clientY: cy })
+    const k = Math.max(5, Math.min(800, view.k * factor))
+    setView({ k, x: p[0] - (cx - r.left) / k, y: p[1] - (cy - r.top) / k })
   }
+  const zoomRef = useRef(zoomAt)
+  useEffect(() => {
+    zoomRef.current = zoomAt
+  })
+  // native non-passive listeners so pinch / Ctrl+wheel zoom only the plan, never the whole page
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const d = Math.max(-60, Math.min(60, e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY))
+      zoomRef.current(Math.exp(-d * (e.ctrlKey ? 0.008 : 0.0015)), e.clientX, e.clientY)
+    }
+    const zoomKey = (e: Event) => {
+      const r = el.getBoundingClientRect()
+      zoomRef.current((e as CustomEvent<number>).detail, r.left + r.width / 2, r.top + r.height / 2)
+    }
+    el.addEventListener('wheel', wheel, { passive: false })
+    window.addEventListener('plan:zoom', zoomKey)
+    return () => {
+      el.removeEventListener('wheel', wheel)
+      window.removeEventListener('plan:zoom', zoomKey)
+    }
+  }, [])
 
   const linkedEnds = (w: Wall, end: 'a' | 'b') => {
     const p = w[end]
@@ -410,7 +435,6 @@ export default function Editor2D() {
       width={size.w}
       height={size.h}
       style={{ cursor: cursorCls, display: 'block', background: '#fbfaf7', touchAction: 'none' }}
-      onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -447,7 +471,7 @@ export default function Editor2D() {
             const pts = r.polygon.map((p) => p.join(',')).join(' ')
             return (
               <g key={r.id} data-kind="room" data-id={r.id}>
-                <polygon points={pts} fill={r.floorColor ?? fd?.color ?? '#ddd'} fillOpacity={0.55} />
+                <polygon points={pts} fill={r.floorMat ? r.floorMat.color ?? FINISH_BY_KEY[r.floorMat.finish ?? '']?.color ?? '#ddd' : r.floorColor ?? fd?.color ?? '#ddd'} fillOpacity={0.55} />
                 <polygon points={pts} fill={`url(#pat-${fd?.pattern ?? 'plain'})`} stroke={isSel('room', r.id) ? '#2f80ed' : 'none'} strokeWidth={2 * px} />
               </g>
             )
