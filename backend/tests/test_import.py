@@ -62,3 +62,33 @@ def test_rejects_oversized_inputs():
     ok, png = cv2.imencode(".png", np.zeros((9000, 9000), np.uint8))
     r = client.post("/api/import", files={"file": ("big.png", png.tobytes(), "image/png")})
     assert r.status_code == 400
+
+
+def test_ai_render_requires_token(tmp_path, monkeypatch):
+    from app import ai_render
+
+    monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
+    ai_render.init(tmp_path, tmp_path)
+    client = TestClient(app)
+    assert client.get("/api/ai/status").json()["configured"] is False
+    r = client.post("/api/ai/render", data={"prompt": "room"}, files={"image": ("a.jpg", b"\xff\xd8\xff\xe0x", "image/jpeg")})
+    assert r.status_code == 400
+
+
+def test_ai_render_saves_output(tmp_path, monkeypatch):
+    from app import ai_render
+
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "r8_test")
+    ai_render.init(tmp_path, tmp_path)
+    seen = {}
+
+    def fake(token, model, prompt, control, mime, seed):
+        seen.update(token=token, model=model, mime=mime)
+        return b"\xff\xd8\xff\xe0photo"
+
+    monkeypatch.setattr(ai_render, "run_prediction", fake)
+    client = TestClient(app)
+    r = client.post("/api/ai/render", data={"prompt": "bathroom", "model": "depth-dev"}, files={"image": ("a.jpg", b"\xff\xd8\xff\xe0x", "image/jpeg")})
+    assert r.status_code == 200, r.text
+    assert seen == {"token": "r8_test", "model": "depth-dev", "mime": "image/jpeg"}
+    assert (tmp_path / r.json()["url"].rsplit("/", 1)[1]).read_bytes().endswith(b"photo")
