@@ -10,6 +10,8 @@ docker compose up -d --build
 
 Open http://localhost:8080. Projects and uploaded files are kept in the `planner-data` Docker volume. Stop with `docker compose down`.
 
+The app has no login, so by default it is reachable only from this computer. To open it from a phone on the same Wi-Fi, change the port line in `docker-compose.yml` to `"8080:8000"` and use `http://<your-computer-ip>:8080`; anyone on that network can then see and edit your projects.
+
 ## Features
 
 - **Import.** General-plan PDFs exported from CAD (like `samples/sample-plan.pdf`) are converted automatically into walls, doors, windows, rooms (with areas) and furniture. The drawing scale is auto-detected (or pick it), and the **Scale** tool calibrates from any known length.
