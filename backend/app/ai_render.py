@@ -133,7 +133,7 @@ def run_prediction(token: str, model: str, prompt: str, control: bytes, mime: st
         url = out[0] if isinstance(out, list) else out
         if not url:
             raise HTTPException(502, "Replicate returned no image")
-        img = client.get(url, follow_redirects=True)
+        img = httpx.get(url, follow_redirects=True, timeout=60)
         if img.status_code >= 300:
             raise _error(img)
         return img.content
