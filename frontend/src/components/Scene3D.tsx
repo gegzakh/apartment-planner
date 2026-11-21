@@ -107,7 +107,7 @@ function OpeningMesh({ o, t, H }: { o: Opening; t: number; H: number }) {
         {[[-hw + 0.03, 0, 0.06, h], [hw - 0.03, 0, 0.06, h], [0, h / 2 - 0.03, o.width, 0.06], [0, -h / 2 + 0.03, o.width, 0.06], [0, 0, 0.05, h]].map(([x, y, sx, sy], i) => (
           <mesh key={i} position={[x, y, 0]} castShadow>
             <boxGeometry args={[sx, sy, 0.07]} />
-            <meshStandardMaterial color={frame} roughness={0.5} />
+            {o.mat && !selected ? <primitive object={getMaterial(o.mat, frame, { faceSize: [Math.max(sx, sy), 0.07] })} attach="material" /> : <meshStandardMaterial color={frame} roughness={0.5} />}
           </mesh>
         ))}
         <mesh position={[0, -h / 2 - 0.02, t / 2 + 0.06]}>
