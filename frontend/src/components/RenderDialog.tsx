@@ -34,7 +34,15 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
     if (viewMode === '2d') set({ viewMode: 'split' })
   }, [viewMode, set])
   const urls = useRef<string[]>([])
-  useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), [])
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+      cancel.current = true
+      urls.current.forEach((u) => URL.revokeObjectURL(u))
+    }
+  }, [])
 
   const rooms = roomId === '*' ? plan.rooms : plan.rooms.filter((r) => r.id === roomId)
   const shots = useMemo(() => rooms.flatMap((r) => roomShots(plan, r)), [rooms, plan])
@@ -49,10 +57,11 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
     try {
       await new Promise((r) => setTimeout(r, 300))
       await renderShots(chosen, w, h, (shot, blob) => {
+        if (!alive.current) return
         const url = URL.createObjectURL(blob)
         urls.current.push(url)
         setResults((rs) => [{ shot, room: roomName(shot.roomId), blob, url }, ...rs])
-      }, () => cancel.current)
+      }, () => cancel.current || !alive.current)
     } catch (e) {
       setMsg(String((e as Error).message ?? e))
     }
