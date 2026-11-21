@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { FURNITURE_BY_TYPE } from './catalog'
+import { FLOOR_BY_KEY, FURNITURE_BY_TYPE } from './catalog'
 import { pointInPolygon } from './geometry'
 import { FINISH_BY_KEY } from './materials'
 import { STYLE_BY_KEY } from './styles'
@@ -74,8 +74,10 @@ const LIGHT: Record<string, string> = {
 export function roomPrompt(plan: Plan, room: Room, lighting: string, extra = '') {
   const kind = roomKind(room.name)
   const st = room.style ? STYLE_BY_KEY[room.style] : undefined
-  const floor = matText(room.floorMat, room.floorColor) || 'wooden'
-  const walls = matText(room.wallMat, room.wallColor ?? '#f2efe9')
+  const fd = FLOOR_BY_KEY[room.floor ?? plan.settings.defaultFloor] ?? FLOOR_BY_KEY.oak
+  const tint = room.floorColor && room.floorColor.toLowerCase() !== fd.color.toLowerCase() ? `${colorName(room.floorColor)} ` : ''
+  const floor = room.floorMat ? matText(room.floorMat, room.floorColor) : `${tint}${fd.label.toLowerCase()}`
+  const walls = matText(room.wallMat, room.wallColor ?? plan.settings.defaultWallColor)
   const ceiling = matText(room.ceilingMat, room.ceilingColor ?? '#ffffff')
   const items = plan.furniture
     .filter((f) => pointInPolygon([f.x, f.y], room.polygon) && f.type !== 'generic')
