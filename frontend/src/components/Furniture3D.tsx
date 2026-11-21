@@ -42,6 +42,51 @@ function Cyl({ p, rt, rb, h, c, seg = 24 }: { p: [number, number, number]; rt: n
   )
 }
 
+const CHROME = '#c9cdd1'
+function Glass({ p, s }: { p: [number, number, number]; s: [number, number, number] }) {
+  return (
+    <mesh position={p}>
+      <boxGeometry args={s} />
+      <meshPhysicalMaterial color="#e3f1f5" transparent opacity={0.22} roughness={0.03} metalness={0.1} />
+    </mesh>
+  )
+}
+function Mirror({ p, s }: { p: [number, number, number]; s: [number, number, number] }) {
+  return (
+    <mesh position={p}>
+      <boxGeometry args={s} />
+      <meshStandardMaterial color="#dfe6ea" metalness={1} roughness={0.04} />
+    </mesh>
+  )
+}
+function Disc({ p, r, h, c, rx = 0, m = 0, ro = 0.5 }: { p: [number, number, number]; r: number; h: number; c: string; rx?: number; m?: number; ro?: number }) {
+  return (
+    <mesh position={p} rotation={[rx, 0, 0]}>
+      <cylinderGeometry args={[r, r, h, 32]} />
+      <meshStandardMaterial color={c} metalness={m} roughness={ro} />
+    </mesh>
+  )
+}
+/** Cabinet front split into doors or drawers with bar handles. */
+function Fronts({ w, h, y, z, n, c, drawers = false }: { w: number; h: number; y: number; z: number; n: number; c: string; drawers?: boolean }) {
+  return (
+    <>
+      {Array.from({ length: n }, (_, i) => {
+        const fw = drawers ? w - 0.006 : w / n - 0.006
+        const fh = drawers ? h / n - 0.006 : h - 0.006
+        const x = drawers ? 0 : -w / 2 + (w / n) * (i + 0.5)
+        const yy = drawers ? y - h / 2 + (h / n) * (i + 0.5) : y
+        return (
+          <group key={i}>
+            <B p={[x, yy, z]} s={[fw, fh, 0.018]} c={c} />
+            <B p={drawers ? [x, yy + fh / 2 - 0.05, z + 0.016] : [x + (i % 2 ? -1 : 1) * (fw / 2 - 0.04), yy, z + 0.016]} s={drawers ? [Math.min(0.3, fw * 0.5), 0.012, 0.014] : [0.012, Math.min(0.3, fh * 0.4), 0.014]} c={CHROME} m={0.8} r={0.3} />
+          </group>
+        )
+      })}
+    </>
+  )
+}
+
 function legs(w: number, d: number, h: number, c: string, inset = 0.05, t = 0.04) {
   return [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b], i) => (
     <B key={i} p={[a * (w / 2 - inset), h / 2, b * (d / 2 - inset)]} s={[t, h, t]} c={c} />
@@ -125,34 +170,56 @@ function Body({ f }: { f: Furniture }) {
     case 'toilet':
       return (
         <group>
-          <Cyl p={[0, 0.2, 0.06]} rt={w / 2} rb={w / 2.6} h={0.4} c={c} />
-          <B p={[0, 0.55, -d / 2 + 0.1]} s={[w, 0.4, 0.18]} c={c} r={0.2} />
+          <Cyl p={[0, 0.12, 0.04]} rt={w * 0.3} rb={w * 0.34} h={0.24} c={c} />
+          <mesh position={[0, 0.3, 0.06]} scale={[1, 1, (d * 0.62) / w]} castShadow>
+            <cylinderGeometry args={[w / 2, w * 0.36, 0.14, 32]} />
+            <meshStandardMaterial color={c} roughness={0.12} />
+          </mesh>
+          <mesh position={[0, 0.385, 0.06]} scale={[1, 1, (d * 0.62) / w]} castShadow>
+            <cylinderGeometry args={[w / 2 + 0.005, w / 2 + 0.005, 0.03, 32]} />
+            <meshStandardMaterial color={c} roughness={0.2} />
+          </mesh>
+          <B p={[0, 0.6, -d / 2 + 0.1]} s={[w, 0.4, 0.18]} c={c} r={0.12} />
+          <B p={[0, 0.81, -d / 2 + 0.1]} s={[w + 0.01, 0.025, 0.19]} c={c} r={0.12} />
+          <Disc p={[0, 0.83, -d / 2 + 0.1]} r={0.03} h={0.01} c={CHROME} m={0.9} ro={0.2} />
         </group>
       )
     case 'basin':
       return (
         <group>
-          <B p={[0, 0.65, 0]} s={[w, 0.4, d]} c="#e8e2d6" />
-          <B p={[0, 0.87, 0]} s={[w, 0.04, d]} c="#ffffff" r={0.15} />
-          <Cyl p={[0, 1.0, -d / 2 + 0.06]} rt={0.015} rb={0.015} h={0.2} c="#c0c0c0" />
+          <B p={[0, 0.62, 0]} s={[w, 0.4, d - 0.02]} c="#b98a5a" />
+          <Fronts w={w} h={0.4} y={0.62} z={(d - 0.02) / 2} n={2} c="#b98a5a" drawers />
+          <B p={[0, 0.85, 0]} s={[w + 0.02, 0.06, d]} c="#ffffff" r={0.1} />
+          <B p={[0, 0.875, 0.03]} s={[w * 0.6, 0.012, d * 0.55]} c="#e9ecee" r={0.1} />
+          <Cyl p={[0, 0.95, -d / 2 + 0.07]} rt={0.016} rb={0.022} h={0.15} c={CHROME} />
+          <B p={[0, 1.02, -d / 2 + 0.12]} s={[0.025, 0.02, 0.1]} c={CHROME} m={0.9} r={0.2} />
+          <Mirror p={[0, 1.55, -d / 2 + 0.01]} s={[Math.min(w, 0.8), 0.75, 0.02]} />
         </group>
       )
     case 'bathtub':
       return (
         <group>
           <B p={[0, 0.27, 0]} s={[w, 0.54, d]} c={c} r={0.15} />
-          <B p={[0, 0.5, 0]} s={[w - 0.12, 0.1, d - 0.12]} c="#cfe5f2" r={0.05} />
+          <B p={[0, 0.545, 0]} s={[w - 0.14, 0.02, d - 0.14]} c="#dfe9ee" r={0.05} />
+          <B p={[0, 0.4, 0]} s={[w - 0.16, 0.02, d - 0.16]} c="#bcd7e4" r={0.05} />
+          <Cyl p={[-w / 2 + 0.1, 0.62, 0]} rt={0.018} rb={0.022} h={0.14} c={CHROME} />
         </group>
       )
     case 'shower':
       return (
         <group>
-          <B p={[0, 0.03, 0]} s={[w, 0.06, d]} c="#f7f7f7" />
-          <mesh position={[0, 1.05, d / 2 - 0.01]}>
-            <boxGeometry args={[w, 2.0, 0.01]} />
-            <meshPhysicalMaterial color="#cfe8f3" transparent opacity={0.3} roughness={0.05} />
-          </mesh>
-          <Cyl p={[0, 2.0, -d / 2 + 0.15]} rt={0.1} rb={0.1} h={0.02} c="#c0c0c0" />
+          <B p={[0, 0.03, 0]} s={[w, 0.06, d]} c="#f2f0ec" />
+          <B p={[0, 0.061, 0]} s={[0.12, 0.002, 0.12]} c="#8d9196" m={0.8} />
+          <Glass p={[0, 1.05, d / 2 - 0.01]} s={[w, 1.95, 0.008]} />
+          <Glass p={[w / 2 - 0.01, 1.05, 0]} s={[0.008, 1.95, d]} />
+          <B p={[0, 2.03, d / 2 - 0.01]} s={[w, 0.025, 0.025]} c={CHROME} m={0.9} r={0.25} />
+          <B p={[w / 2 - 0.01, 2.03, 0]} s={[0.025, 0.025, d]} c={CHROME} m={0.9} r={0.25} />
+          <B p={[w / 2 - 0.01, 1.05, d / 2 - 0.01]} s={[0.025, 1.95, 0.025]} c={CHROME} m={0.9} r={0.25} />
+          <B p={[w * 0.1, 1.1, d / 2 + 0.01]} s={[0.02, 0.3, 0.02]} c={CHROME} m={0.9} r={0.25} />
+          <B p={[0, 2.05, -d / 2 + 0.17]} s={[0.02, 0.02, 0.32]} c={CHROME} m={0.9} r={0.25} />
+          <Disc p={[0, 2.03, -d / 2 + 0.3]} r={0.12} h={0.015} c={CHROME} m={0.9} ro={0.25} />
+          <B p={[-w / 2 + 0.25, 1.3, -d / 2 + 0.02]} s={[0.02, 0.7, 0.02]} c={CHROME} m={0.9} r={0.25} />
+          <B p={[-w / 2 + 0.25, 1.05, -d / 2 + 0.04]} s={[0.08, 0.08, 0.04]} c={CHROME} m={0.9} r={0.25} />
         </group>
       )
     case 'kitchen_base':
@@ -164,14 +231,62 @@ function Body({ f }: { f: Furniture }) {
           <B p={[0, (h - 0.04) / 2 + 0.05, 0]} s={[w - 0.004, h - 0.09, d - 0.02]} c={f.type === 'stove' ? '#e8e8e8' : c} />
           <B p={[0, 0.025, 0.02]} s={[w, 0.05, d - 0.05]} c="#333" />
           <B p={[0, h - 0.02, 0]} s={[w, 0.04, d]} c="#d8d3cb" r={0.3} />
-          {f.type === 'stove' && <B p={[0, h + 0.001, 0]} s={[w - 0.06, 0.005, d - 0.08]} c="#111" r={0.1} />}
+          {f.type !== 'stove' && f.type !== 'dishwasher' && <Fronts w={w} h={h - 0.1} y={(h - 0.04) / 2 + 0.05} z={d / 2 - 0.005} n={w > 0.7 ? 2 : 1} c={c} />}
+          {f.type === 'dishwasher' && <Fronts w={w} h={h - 0.1} y={(h - 0.04) / 2 + 0.05} z={d / 2 - 0.005} n={1} c={c} drawers />}
+          {f.type === 'stove' && (
+            <>
+              <B p={[0, h + 0.001, 0]} s={[w - 0.06, 0.005, d - 0.08]} c="#111" r={0.1} />
+              {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b], i) => <Disc key={i} p={[a * w * 0.2, h + 0.005, b * d * 0.2]} r={0.08} h={0.002} c="#3a3a3a" ro={0.3} />)}
+              <B p={[0, 0.45, d / 2 - 0.005]} s={[w - 0.04, 0.5, 0.02]} c="#1b1b1b" r={0.1} />
+              <B p={[0, 0.74, d / 2 + 0.015]} s={[w * 0.7, 0.015, 0.02]} c={CHROME} m={0.8} r={0.3} />
+            </>
+          )}
           {f.type === 'kitchen_sink' && <B p={[0, h, 0.02]} s={[w * 0.6, 0.01, d * 0.6]} c="#9aa0a6" m={0.8} r={0.2} />}
         </group>
       )
     case 'kitchen_wall':
-      return <B p={[0, 1.45 + h / 2, 0]} s={[w, h, d]} c={c} />
+      return (
+        <group>
+          <B p={[0, 1.45 + h / 2, -0.01]} s={[w, h, d - 0.02]} c={c} />
+          <Fronts w={w} h={h} y={1.45 + h / 2} z={d / 2 - 0.02} n={w > 0.7 ? 2 : 1} c={c} />
+        </group>
+      )
     case 'fridge':
-      return <B p={[0, h / 2, 0]} s={[w, h, d]} c={c} r={0.3} m={0.3} />
+      return (
+        <group>
+          <B p={[0, h / 2, -0.01]} s={[w, h, d - 0.02]} c={c} r={0.3} m={0.3} />
+          <B p={[0, h * 0.82, d / 2 - 0.01]} s={[w - 0.006, h * 0.34 - 0.008, 0.02]} c={c} r={0.3} m={0.3} />
+          <B p={[0, h * 0.33, d / 2 - 0.01]} s={[w - 0.006, h * 0.64 - 0.008, 0.02]} c={c} r={0.3} m={0.3} />
+          <B p={[w / 2 - 0.05, h * 0.75, d / 2 + 0.02]} s={[0.02, 0.3, 0.025]} c={CHROME} m={0.8} r={0.3} />
+          <B p={[w / 2 - 0.05, h * 0.55, d / 2 + 0.02]} s={[0.02, 0.3, 0.025]} c={CHROME} m={0.8} r={0.3} />
+        </group>
+      )
+    case 'wardrobe':
+    case 'cabinet':
+    case 'dresser':
+      return (
+        <group>
+          <B p={[0, (f.elevation ?? 0) + h / 2, -0.01]} s={[w, h, d - 0.02]} c={c} />
+          <Fronts w={w} h={h - 0.02} y={(f.elevation ?? 0) + h / 2} z={d / 2 - 0.01} n={f.type === 'dresser' ? 3 : Math.max(1, Math.round(w / 0.5))} c={c} drawers={f.type === 'dresser'} />
+        </group>
+      )
+    case 'bookshelf': {
+      const n = Math.max(2, Math.round(h / 0.38))
+      return (
+        <group>
+          <B p={[-w / 2 + 0.01, h / 2, 0]} s={[0.02, h, d]} c={c} />
+          <B p={[w / 2 - 0.01, h / 2, 0]} s={[0.02, h, d]} c={c} />
+          <B p={[0, h / 2, -d / 2 + 0.005]} s={[w, h, 0.01]} c={c} />
+          {Array.from({ length: n + 1 }, (_, i) => <B key={i} p={[0, (h / n) * i + 0.01, 0]} s={[w, 0.02, d]} c={c} />)}
+          {Array.from({ length: n }, (_, i) =>
+            Array.from({ length: 7 }, (_, j) => {
+              const bh = 0.2 + ((i * 7 + j) % 4) * 0.03
+              const col = ['#8c3b2f', '#2f4f6f', '#d8c9a8', '#3f5f45', '#6b4e3d', '#c9a45c', '#444'][(i * 3 + j) % 7]
+              return j % 5 === 4 ? null : <B key={`${i}-${j}`} p={[-w / 2 + 0.08 + j * ((w - 0.16) / 7), (h / n) * i + 0.02 + bh / 2, 0]} s={[0.035, bh, d * 0.75]} c={col} r={0.8} />
+            }))}
+        </group>
+      )
+    }
     case 'tv_stand':
       return (
         <group>
@@ -184,21 +299,24 @@ function Body({ f }: { f: Furniture }) {
     case 'plant':
       return (
         <group>
-          <Cyl p={[0, 0.17, 0]} rt={w / 3} rb={w / 4} h={0.34} c="#c8b8a6" />
-          <mesh position={[0, 0.34 + (h - 0.34) / 2, 0]} castShadow>
-            <sphereGeometry args={[w / 1.6, 16, 12]} />
-            <meshStandardMaterial color={c} roughness={0.9} />
-          </mesh>
+          <Cyl p={[0, 0.17, 0]} rt={w / 3} rb={w / 4} h={0.34} c="#e8e1d6" />
+          {[[0, 0.55, 0, 0.6], [0.08, 0.75, 0.05, 0.45], [-0.07, 0.8, -0.04, 0.42], [0.02, 0.95, -0.06, 0.35], [-0.04, 0.68, 0.08, 0.4]].map(([x, y, z, k], i) => (
+            <mesh key={i} position={[x * w * 2, 0.34 + (h - 0.34) * (y - 0.4) * 1.4, z * w * 2]} castShadow>
+              <icosahedronGeometry args={[(w / 2) * k * 1.4, 1]} />
+              <meshStandardMaterial color={c} roughness={0.85} flatShading />
+            </mesh>
+          ))}
         </group>
       )
     case 'washing_machine':
       return (
         <group>
-          <B p={[0, h / 2, 0]} s={[w, h, d]} c={c} />
-          <mesh position={[0, h * 0.5, d / 2 + 0.005]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[w * 0.3, w * 0.3, 0.02, 32]} />
-            <meshStandardMaterial color="#555" metalness={0.5} roughness={0.2} />
-          </mesh>
+          <B p={[0, h / 2, 0]} s={[w, h, d]} c={c} r={0.3} />
+          <B p={[0, h - 0.06, d / 2 + 0.003]} s={[w - 0.04, 0.09, 0.006]} c="#f7f8f9" r={0.3} />
+          <B p={[w * 0.12, h - 0.06, d / 2 + 0.008]} s={[0.12, 0.04, 0.004]} c="#1d2226" r={0.2} />
+          <Disc p={[w * 0.33, h - 0.06, d / 2 + 0.012]} r={0.028} h={0.02} rx={Math.PI / 2} c="#d5d9dc" m={0.6} ro={0.3} />
+          <Disc p={[0, h * 0.45, d / 2 + 0.01]} r={w * 0.34} h={0.03} rx={Math.PI / 2} c={CHROME} m={0.9} ro={0.2} />
+          <Disc p={[0, h * 0.45, d / 2 + 0.022]} r={w * 0.27} h={0.012} rx={Math.PI / 2} c="#30363b" m={0.2} ro={0.05} />
         </group>
       )
     default:

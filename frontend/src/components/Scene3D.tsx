@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { ELECTRICAL_BY_TYPE, FLOOR_BY_KEY, PLUMBING_BY_TYPE, RUN_STYLE } from '../lib/catalog'
-import { add, mul, planBounds, pointInPolygon, panoPoint, wallFrame } from '../lib/geometry'
+import { add, mul, openingFrame, planBounds, pointInPolygon, panoPoint, projectOnSegment, wallFrame } from '../lib/geometry'
+import { roomKind } from '../lib/aiPrompt'
 import { useStore } from '../lib/store'
 import { getMaterial } from '../lib/materials'
 import { floorTexture } from '../lib/textures'
@@ -176,6 +177,57 @@ function FloorMesh({ r, plan, selected }: { r: Room; plan: Plan; selected: boole
         <meshStandardMaterial map={tex} color={selected ? '#bcd6fb' : '#ffffff'} roughness={0.75} side={THREE.DoubleSide} />
       )}
     </mesh>
+  )
+}
+
+/** Skirting boards along a room's edges, broken at doorways. Wet rooms are tiled to the floor and get none. */
+function Skirting({ r, plan }: { r: Room; plan: Plan }) {
+  const segs = useMemo(() => {
+    if (/bathroom|toilet/.test(roomKind(r.name))) return []
+    const doors = plan.openings
+      .filter((o) => o.type !== 'window')
+      .map((o) => {
+        const w = plan.walls.find((x) => x.id === o.wallId)
+        return w ? { c: openingFrame(o, w).c, width: o.width, t: w.thickness } : null
+      })
+      .filter((d): d is { c: [number, number]; width: number; t: number } => !!d)
+    const out: { p: [number, number]; L: number; angle: number }[] = []
+    const P = r.polygon
+    P.forEach((a, i) => {
+      const b = P[(i + 1) % P.length]
+      const dx = b[0] - a[0], dy = b[1] - a[1]
+      const L = Math.hypot(dx, dy)
+      if (L < 0.1) return
+      const u: [number, number] = [dx / L, dy / L]
+      let n: [number, number] = [-u[1], u[0]]
+      const m: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+      if (!pointInPolygon([m[0] + n[0] * 0.05, m[1] + n[1] * 0.05], P)) n = [-n[0], -n[1]]
+      const cuts = doors
+        .map((d) => ({ d, pr: projectOnSegment(d.c, a, b) }))
+        .filter(({ d, pr }) => pr.d < d.t / 2 + 0.15)
+        .map(({ d, pr }) => [pr.along - d.width / 2 - 0.02, pr.along + d.width / 2 + 0.02] as [number, number])
+        .sort((x, y) => x[0] - y[0])
+      let t = 0
+      for (const [c0, c1] of [...cuts, [L, L] as [number, number]]) {
+        const e = Math.min(c0, L)
+        if (e - t > 0.05) {
+          const mid = (t + e) / 2
+          out.push({ p: [a[0] + u[0] * mid + n[0] * 0.007, a[1] + u[1] * mid + n[1] * 0.007], L: e - t, angle: Math.atan2(u[1], u[0]) })
+        }
+        t = Math.max(t, c1)
+      }
+    })
+    return out
+  }, [r, plan.openings, plan.walls])
+  return (
+    <>
+      {segs.map((s, i) => (
+        <mesh key={i} position={[s.p[0], 0.04, s.p[1]]} rotation={[0, -s.angle, 0]} castShadow receiveShadow>
+          <boxGeometry args={[s.L, 0.08, 0.014]} />
+          <meshStandardMaterial color="#f6f4f0" roughness={0.45} />
+        </mesh>
+      ))}
+    </>
   )
 }
 
@@ -405,6 +457,7 @@ export function SceneContent() {
         <meshStandardMaterial color={night ? '#1a1d25' : '#cfd6cf'} roughness={1} />
       </mesh>
       {layers.rooms && plan.rooms.map((r) => <FloorMesh key={r.id} r={r} plan={plan} selected={selection?.id === r.id} />)}
+      {layers.walls && plan.rooms.map((r) => <Skirting key={r.id} r={r} plan={plan} />)}
       {plan.rooms.map((r) => <CeilingMesh key={r.id} r={r} h={plan.settings.wallHeight} visible={showCeiling} />)}
       {layers.walls && plan.walls.map((w) => (
         <WallMesh key={w.id} w={w} plan={plan} openings={byWall[w.id] ?? []} selected={selection?.id === w.id} cut={cut} />
