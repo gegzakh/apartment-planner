@@ -125,8 +125,8 @@ function Body({ f }: { f: Furniture }) {
     case 'toilet':
       return (
         <group>
-          <Cyl p={[0, 0.2, 0.06]} rt={w / 2} rb={w / 2.6} h={0.4} c="#fff" />
-          <B p={[0, 0.55, -d / 2 + 0.1]} s={[w, 0.4, 0.18]} c="#fff" r={0.2} />
+          <Cyl p={[0, 0.2, 0.06]} rt={w / 2} rb={w / 2.6} h={0.4} c={c} />
+          <B p={[0, 0.55, -d / 2 + 0.1]} s={[w, 0.4, 0.18]} c={c} r={0.2} />
         </group>
       )
     case 'basin':
@@ -140,7 +140,7 @@ function Body({ f }: { f: Furniture }) {
     case 'bathtub':
       return (
         <group>
-          <B p={[0, 0.27, 0]} s={[w, 0.54, d]} c="#ffffff" r={0.15} />
+          <B p={[0, 0.27, 0]} s={[w, 0.54, d]} c={c} r={0.15} />
           <B p={[0, 0.5, 0]} s={[w - 0.12, 0.1, d - 0.12]} c="#cfe5f2" r={0.05} />
         </group>
       )
@@ -194,7 +194,7 @@ function Body({ f }: { f: Furniture }) {
     case 'washing_machine':
       return (
         <group>
-          <B p={[0, h / 2, 0]} s={[w, h, d]} c="#f2f2f2" />
+          <B p={[0, h / 2, 0]} s={[w, h, d]} c={c} />
           <mesh position={[0, h * 0.5, d / 2 + 0.005]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[w * 0.3, w * 0.3, 0.02, 32]} />
             <meshStandardMaterial color="#555" metalness={0.5} roughness={0.2} />
