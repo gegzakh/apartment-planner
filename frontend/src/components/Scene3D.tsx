@@ -126,7 +126,7 @@ function OpeningMesh({ o, t, H }: { o: Opening; t: number; H: number }) {
     const h = Math.min(o.height, H) - 0.01
     return (
       <group position={[o.offset, 0, 0]} onClick={onSel('opening', o.id)}>
-        <group position={[hingeX, 0, (s * t) / 2]} rotation={[0, phi, 0]}>
+        <group name="door-leaf" position={[hingeX, 0, (s * t) / 2]} rotation={[0, phi, 0]}>
           <mesh position={[(dir * o.width) / 2, h / 2, 0]} castShadow>
             <boxGeometry args={[o.width - 0.02, h, 0.04]} />
             {selected ? <meshStandardMaterial color={SEL} /> : <primitive object={getMaterial(o.mat, o.color ?? '#e9e3d8', { faceSize: [o.width, h], fallbackFinish: 'lacquer_matte' })} attach="material" />}
