@@ -30,7 +30,7 @@ function inset(p: Vec2, c: Vec2, d: number): Vec2 {
 
 function inFurniture(plan: Plan, p: Vec2, margin: number) {
   return plan.furniture.some((f) => {
-    if ((f.elevation ?? 0) > EYE) return false
+    if ((f.elevation ?? 0) > EYE || f.height < 0.05) return false
     const a = (-f.rotation * Math.PI) / 180
     const dx = p[0] - f.x, dy = p[1] - f.y
     const lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a)
