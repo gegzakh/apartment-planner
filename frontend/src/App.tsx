@@ -61,6 +61,7 @@ export default function App() {
   // ---- autosave ----
   useEffect(() => {
     if (!dirty || !loaded.current) return
+    backup()
     setSaved('saving')
     const t = setTimeout(async () => {
       const ok = await persist()
@@ -209,11 +210,16 @@ function readBackup(id: string): { plan: Plan; versions?: Version[] } | null {
 }
 
 /** Writes the current project to browser storage, then to the server. Returns false when offline. */
-async function persist(): Promise<boolean> {
+function backup() {
   const { projectId: id, plan, versions } = useStore.getState()
   localStorage.setItem(backupKey(id), JSON.stringify({ plan, versions }))
   localStorage.setItem(unsyncedKey(id), '1')
   localStorage.setItem('ap:project', id)
+}
+
+async function persist(): Promise<boolean> {
+  backup()
+  const { projectId: id, plan, versions } = useStore.getState()
   try {
     await saveProject(id, { name: plan.name, plan, versions })
   } catch {
