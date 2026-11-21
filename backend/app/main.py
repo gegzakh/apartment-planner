@@ -146,6 +146,8 @@ if STATIC_DIR.exists():
 
     @app.get("/{full_path:path}")
     def spa(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(404, "Not found")
         target = (STATIC_DIR / full_path).resolve()
         if full_path and target.is_file() and STATIC_DIR.resolve() in target.parents:
             return FileResponse(target)

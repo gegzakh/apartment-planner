@@ -38,7 +38,8 @@ def test_import_endpoint_and_projects():
     assert client.get("/api/projects/test_project").json()["name"] == "Test"
     assert any(p["id"] == "test_project" for p in client.get("/api/projects").json())
     assert client.delete("/api/projects/test_project").status_code == 200
-    assert client.get("/api/projects/../etc").status_code in (400, 404)
+    assert client.get("/api/projects/..%2Fetc").status_code in (400, 404)
+    assert client.get("/api/projects/../etc").status_code == 404
 
 
 def test_rejects_unknown_file():

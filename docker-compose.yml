@@ -1,0 +1,12 @@
+services:
+  planner:
+    build: .
+    image: apartment-planner:latest
+    ports:
+      - "8080:8000"
+    volumes:
+      - planner-data:/data
+    restart: unless-stopped
+
+volumes:
+  planner-data:
