@@ -9,8 +9,8 @@ import type { Furniture, MaterialSpec } from '../lib/types'
 const Finish = createContext<{ mainColor: string; main?: MaterialSpec; accent?: MaterialSpec }>({ mainColor: '' })
 
 function isNeutral(c: string) {
-  const l = new THREE.Color(c).getHSL({ h: 0, s: 0, l: 0 }).l
-  return l > 0.88 || l < 0.12
+  const l = new THREE.Color(c).getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace).l
+  return l > 0.88 || l < 0.1
 }
 
 function useFinish(c: string, face: [number, number], r?: number, m?: number) {
