@@ -43,7 +43,7 @@ export default function App() {
     const local = readBackup(id)
     const unsynced = !!local && localStorage.getItem(unsyncedKey(id)) === '1'
     const fromLocal = (serverVersions?: Version[]) =>
-      set({ projectId: id, plan: normalize(local!.plan), versions: local!.versions?.length ? local!.versions : serverVersions ?? [], past: [], future: [], dirty: unsynced })
+      set({ projectId: id, plan: normalize(local!.plan), versions: local!.versions ?? serverVersions ?? [], past: [], future: [], dirty: unsynced })
     loadProject(id)
       .then((doc) => {
         loaded.current = true
