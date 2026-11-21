@@ -32,6 +32,10 @@ export default function App() {
   const [dialog, setDialog] = useState<null | 'import' | 'export' | 'json' | 'projects'>(null)
   const [saved, setSaved] = useState<'saved' | 'saving' | 'offline'>('saved')
   const loaded = useRef(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const tool = useStore((s) => s.tool)
+  const toolArg = useStore((s) => s.toolArg)
+  useEffect(() => setToolsOpen(false), [tool, toolArg])
 
   // ---- load last project ----
   useEffect(() => {
@@ -115,6 +119,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
+        <button className="mobile-only" onClick={() => setToolsOpen((v) => !v)}>☰ Tools</button>
         <span className="brand">🏠 Apartment Planner</span>
         <input className="name-input" value={plan.name} onChange={(e) => update((d) => (d.name = e.target.value), { coalesce: 'name' })} />
         <button onClick={() => setDialog('projects')}>Projects</button>
@@ -134,7 +139,7 @@ export default function App() {
         <button className="primary" onClick={() => setDialog('export')}>⇪ Download / Share</button>
       </header>
       <div className="main">
-        <LeftPanel />
+        <LeftPanel open={toolsOpen} />
         <div className={`stage ${viewMode === 'split' ? 'split' : ''}`}>
           {show2d && (
             <div className="pane">

@@ -15,7 +15,7 @@ const TOOLS: { t: Tool; ic: string; label: string; hint: string }[] = [
   { t: 'viewpoint', ic: '◉', label: '360° point', hint: 'Click to place a 360° viewpoint' },
 ]
 
-export default function LeftPanel() {
+export default function LeftPanel({ open = false }: { open?: boolean }) {
   const tool = useStore((s) => s.tool)
   const toolArg = useStore((s) => s.toolArg)
   const setTool = useStore((s) => s.setTool)
@@ -24,7 +24,7 @@ export default function LeftPanel() {
   const cats = [...new Set(FURNITURE.map((f) => f.category))]
   const hint = TOOLS.find((x) => x.t === tool)?.hint ?? (tool === 'run' ? 'Click points of the line, double-click / Enter to finish' : 'Click on the plan to place')
   return (
-    <aside className="side left">
+    <aside className={`side left ${open ? 'open' : ''}`}>
       <div className="section">
         <h4>Tools</h4>
         <div className="tools">
