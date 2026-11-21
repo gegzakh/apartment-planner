@@ -138,7 +138,11 @@ export function planBounds(plan: Plan) {
   const pts: Vec2[] = []
   for (const w of plan.walls) pts.push(w.a, w.b)
   for (const r of plan.rooms) pts.push(...r.polygon)
-  for (const f of plan.furniture) pts.push([f.x, f.y])
+  for (const f of plan.furniture) {
+    const r = Math.hypot(f.width, f.depth) / 2
+    pts.push([f.x - r, f.y - r], [f.x + r, f.y + r])
+  }
+  for (const o of plan.overlays) if (o.visible) pts.push([o.x, o.y], [o.x + o.width, o.y + o.height])
   if (!pts.length) return { minX: 0, minY: 0, maxX: 10, maxY: 8 }
   const b = bounds(pts)
   return { minX: b.minX - 0.5, minY: b.minY - 0.5, maxX: b.maxX + 0.5, maxY: b.maxY + 0.5 }
