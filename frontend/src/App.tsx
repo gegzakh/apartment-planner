@@ -212,9 +212,13 @@ function readBackup(id: string): { plan: Plan; versions?: Version[] } | null {
 /** Writes the current project to browser storage, then to the server. Returns false when offline. */
 function backup() {
   const { projectId: id, plan, versions } = useStore.getState()
-  localStorage.setItem(backupKey(id), JSON.stringify({ plan, versions }))
-  localStorage.setItem(unsyncedKey(id), '1')
-  localStorage.setItem('ap:project', id)
+  try {
+    localStorage.setItem('ap:project', id)
+    localStorage.setItem(backupKey(id), JSON.stringify({ plan, versions }))
+    localStorage.setItem(unsyncedKey(id), '1')
+  } catch {
+    // storage full: the server save still runs
+  }
 }
 
 async function persist(): Promise<boolean> {
