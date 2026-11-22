@@ -75,9 +75,10 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     aiStatus().then(setAi).catch(() => setAi({ configured: false, source: null, models: [] }))
     devinStatus().then((s) => setDevinOn(s.configured)).catch(() => setDevinOn(false))
-    Promise.all(savedJobs().map((id) => devinJob(id).catch(() => null))).then((jobs) => {
-      const ok = jobs.filter((j): j is DevinJob => !!j)
-      localStorage.setItem(JOBS_KEY, JSON.stringify(ok.map((j) => j.id)))
+    const ids = savedJobs()
+    Promise.all(ids.map((id) => devinJob(id).catch((e: Error) => (/not found|invalid/i.test(e.message) ? 'gone' : null)))).then((jobs) => {
+      const ok = jobs.filter((j): j is DevinJob => !!j && j !== 'gone')
+      localStorage.setItem(JOBS_KEY, JSON.stringify(ids.filter((_, i) => jobs[i] !== 'gone')))
       if (!alive.current) return
       const restored = ok.flatMap((j) =>
         j.items.map((it): Result => ({
