@@ -7,6 +7,7 @@ import type { Overlay, Plan } from '../lib/types'
 export default function ImportDialog({ onClose, onSample }: { onClose: () => void; onSample?: () => void }) {
   const [kind, setKind] = useState<Overlay['kind']>('general')
   const [scale, setScale] = useState('')
+  const [width, setWidth] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [over, setOver] = useState(false)
@@ -18,7 +19,7 @@ export default function ImportDialog({ onClose, onSample }: { onClose: () => voi
     setBusy(true)
     setErr('')
     try {
-      const res = await importFile(file, kind, kind === 'general' ? (scale ? +scale : undefined) : planScale)
+      const res = await importFile(file, kind, kind === 'general' ? (scale ? +scale : undefined) : planScale, kind === 'general' && +width > 1 ? +width : undefined)
       apply(res, file.name)
       onClose()
     } catch (e) {
@@ -88,6 +89,9 @@ export default function ImportDialog({ onClose, onSample }: { onClose: () => voi
                 {[20, 25, 50, 75, 100, 200].map((s) => <option key={s} value={s}>1:{s}</option>)}
               </select>
             </label>
+            <label className="row"><span>Plan width for photos (m)</span>
+              <input type="number" min={2} max={99} step={0.01} placeholder="Auto (from door widths)" value={width} onChange={(e) => setWidth(e.target.value)} />
+            </label>
             {hasPlan && (
               <label className="row"><span>Existing plan</span>
                 <select value={mode} onChange={(e) => setMode(e.target.value as 'replace' | 'add')}>
@@ -100,7 +104,7 @@ export default function ImportDialog({ onClose, onSample }: { onClose: () => voi
         )}
         <p className="small muted">
           {kind === 'general'
-            ? 'Vector PDFs exported from AutoCAD/ArchiCAD are converted automatically into walls, doors, windows, rooms and furniture. Scanned images are added as a tracing overlay.'
+            ? 'Vector PDFs exported from AutoCAD/ArchiCAD are converted exactly into walls, doors, windows, rooms and furniture. Photos, scans and screenshots are recognised too (works best with hatched or filled walls, taken straight on); check and correct the result. For photos, enter the outer plan width if you know it.'
             : 'The drawing is placed as a semi-transparent overlay aligned with the general plan. Use the Electrical / Water palettes on the left to place points and runs on top of it.'}
         </p>
         <div

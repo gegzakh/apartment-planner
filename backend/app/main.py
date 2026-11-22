@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import ai_render, devin_jobs
 from .pdf_import import parse_pdf, render_overlay_png
+from .raster_import import parse_image
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", Path(__file__).resolve().parents[2] / "frontend" / "dist"))
@@ -68,6 +69,7 @@ async def import_plan(
     kind: str = Query("general", pattern="^(general|electrical|plumbing)$"),
     scale: int | None = Query(None, ge=1, le=1000),
     detect: bool = Query(True),
+    width: float | None = Query(None, gt=1, lt=100),
 ):
     data = await file.read()
     if len(data) > MAX_UPLOAD:
@@ -114,9 +116,18 @@ async def import_plan(
             raise HTTPException(400, "Unsupported or too large image (max 60 megapixels)")
         h, w = img.shape[:2]
         width_m = 10.0
-        return {"overlayUrl": f"/api/files/{fid}.{ext}", "kind": kind, "detected": False,
-                "overlay": {"x": 0, "y": 0, "width": width_m, "height": width_m * h / w},
-                "warning": "Images are added as overlays. Use the Calibrate tool to set the real scale."}
+        result = {"overlayUrl": f"/api/files/{fid}.{ext}", "kind": kind, "detected": False,
+                  "overlay": {"x": 0, "y": 0, "width": width_m, "height": width_m * h / w},
+                  "warning": "Images are added as overlays. Use the Calibrate tool to set the real scale."}
+        if detect and kind == "general":
+            try:
+                parsed = parse_image(data, width_m=width)
+            except Exception as exc:  # noqa: BLE001
+                result["warning"] = f"No walls recognised in this image ({exc}); it is added as a tracing overlay."
+            else:
+                (FILES / f"{fid}.png").write_bytes(parsed.pop("overlayPng"))
+                result.update(parsed, overlayUrl=f"/api/files/{fid}.png", detected=True, warning=None)
+        return result
     raise HTTPException(400, "Upload a PDF, PNG or JPG file")
 
 

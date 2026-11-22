@@ -27,11 +27,12 @@ async function check(r: Response) {
   return r
 }
 
-export async function importFile(file: File, kind: Overlay['kind'], scale?: number): Promise<ImportResult> {
+export async function importFile(file: File, kind: Overlay['kind'], scale?: number, width?: number): Promise<ImportResult> {
   const fd = new FormData()
   fd.append('file', file)
   const q = new URLSearchParams({ kind })
   if (scale) q.set('scale', String(scale))
+  if (width) q.set('width', String(width))
   const r = await check(await fetch(`/api/import?${q}`, { method: 'POST', body: fd }))
   return r.json()
 }

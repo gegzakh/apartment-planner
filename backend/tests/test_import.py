@@ -132,3 +132,33 @@ def test_devin_job_roundtrip(tmp_path, monkeypatch):
     assert (tmp_path / url.rsplit("/", 1)[1]).read_bytes().endswith(b"img")
     assert client.get(f"/api/devin/jobs/{job['id']}/shots/0").content == jpg
     assert client.get("/api/devin/jobs/../x").status_code in (400, 404)
+
+
+def test_raster_plan_recognition():
+    import cv2
+    import numpy as np
+
+    from app.raster_import import parse_image
+
+    img = np.full((1200, 900), 255, np.uint8)
+
+    def hatched(x0, y0, x1, y1):
+        cv2.rectangle(img, (x0, y0), (x1, y1), 0, 3)
+        for k in range(-1200, 1200, 10):
+            m = np.zeros_like(img)
+            cv2.line(m, (x0 + k, y0), (x0 + k + (y1 - y0), y1), 255, 2)
+            m[:y0], m[y1 + 1:], m[:, :x0], m[:, x1 + 1:] = 0, 0, 0, 0
+            img[m > 0] = 0
+
+    hatched(100, 100, 800, 130)    # top
+    hatched(100, 1070, 800, 1100)  # bottom
+    hatched(100, 100, 130, 1100)   # left
+    hatched(770, 100, 800, 1100)   # right
+    hatched(130, 585, 380, 605)    # partition with a doorway
+    hatched(480, 585, 770, 605)
+    ok, png = cv2.imencode(".png", img)
+    r = parse_image(png.tobytes(), width_m=7.0)
+    assert len(r["rooms"]) == 2
+    doors = [o for o in r["openings"] if o["type"] == "door"]
+    assert len(doors) == 1 and 0.8 < doors[0]["width"] < 1.2
+    assert 6.8 < max(w["b"][0] for w in r["walls"]) - 0.5 < 7.2
