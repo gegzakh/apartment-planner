@@ -45,6 +45,7 @@ interface Result {
   /** Devin job id and item index */
   job?: string
   index?: number
+  via?: 'devin'
 }
 
 export default function RenderDialog({ onClose }: { onClose: () => void }) {
@@ -194,7 +195,7 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
         localStorage.setItem(JOBS_KEY, JSON.stringify([job.id, ...savedJobs()].slice(0, 10)))
         part.forEach((it, i) => patchResult(it.id, { job: job.id, index: i }))
       } catch (e) {
-        part.forEach((it) => patchResult(it.id, { ai: 'error', error: (e as Error).message }))
+        part.forEach((it) => patchResult(it.id, { ai: 'error', error: (e as Error).message, via: 'devin' }))
       }
     }
     if (!jobs.length) return setMsg('Could not send the photos to Devin.')
@@ -259,7 +260,8 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
   async function retry(r: Result) {
     patchResult(r.id, { ai: 'pending', error: undefined })
     const src = r.src ? await (await fetch(r.src)).blob() : r.blob
-    await photo(r.id, r.shot, src)
+    if (r.via === 'devin') await askDevin([{ id: r.id, shot: r.shot, blob: src }])
+    else await photo(r.id, r.shot, src)
   }
   async function devinSet(fn: () => Promise<DevinStatus>) {
     setMsg('')
