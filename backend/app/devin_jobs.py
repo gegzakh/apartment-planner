@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -22,6 +23,7 @@ MAX_ITEMS = 60
 JOB_ID = re.compile(r"^[a-f0-9]{12}$")
 
 router = APIRouter(prefix="/api/devin")
+_lock = threading.Lock()
 _files_dir: Path
 _jobs_dir: Path
 
@@ -151,17 +153,18 @@ def get_job(job_id: str):
 
 @router.post("/jobs/{job_id}/items/{index}")
 def put_result(job_id: str, index: int, image: UploadFile = File(...)):
-    job = _load(job_id)
-    if not 0 <= index < len(job["items"]):
+    if not 0 <= index < len(_load(job_id)["items"]):
         raise HTTPException(404, "No such item")
     data = image.file.read(MAX_SHOT * 4 + 1)
     if len(data) > MAX_SHOT * 4:
         raise HTTPException(413, "Image too large")
     name = f"{uuid.uuid4().hex[:16]}.{_mime(data)}"
     (_files_dir / name).write_bytes(data)
-    job["items"][index]["result"] = f"/api/files/{name}"
-    job["items"][index]["error"] = None
-    _save(job)
+    with _lock:
+        job = _load(job_id)
+        job["items"][index]["result"] = f"/api/files/{name}"
+        job["items"][index]["error"] = None
+        _save(job)
     return _public(job)
 
 
