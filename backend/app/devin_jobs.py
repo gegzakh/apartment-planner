@@ -139,6 +139,7 @@ def create_job(images: list[UploadFile] = File(...), meta: str = Form(...)):
             "result": None,
         })
     job = {"id": job_id, "created": time.time(), "items": out}
+    _save(job)
     err = notify(job)
     job["notified"] = err is None
     job["notifyError"] = err
