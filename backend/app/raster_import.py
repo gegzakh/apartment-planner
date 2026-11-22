@@ -14,7 +14,7 @@ import numpy as np
 from .pdf_import import _guess_furniture, _id, _mask_to_rects, _merge_contained, _name_rooms
 
 WORK_SIDE = 2400  # longer image side used for processing (px)
-DOOR_M = 0.85  # typical door gap used to guess the scale
+DOOR_M = 1.0  # typical drawn door gap (leaf plus frame) used to guess the scale
 
 
 def _binarise(gray: np.ndarray) -> np.ndarray:
@@ -65,6 +65,14 @@ def _keep_plan(walls: np.ndarray) -> np.ndarray:
     return keep
 
 
+def _overlap(a, b) -> float:
+    """Intersection over the smaller box."""
+    ix = max(0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    small = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+    return ix * iy / small if small else 0.0
+
+
 def _gaps(walls: np.ndarray, rects, max_len: int, min_len: int, max_thick: int):
     """Breaks between collinear wall pieces: (x0, y0, x1, y1, horizontal).
 
@@ -113,7 +121,7 @@ def _gaps(walls: np.ndarray, rects, max_len: int, min_len: int, max_thick: int):
             half = len(sides) // 2
             if sides[:half].mean() > 0.5 or sides[half:].mean() > 0.5:
                 continue
-            if any(abs(g[0] - o[0]) < 6 and abs(g[1] - o[1]) < 6 and abs(g[2] - o[2]) < 6 and abs(g[3] - o[3]) < 6 for o in out):
+            if any(_overlap(g, o) > 0.5 for o in out):
                 continue
             out.append(g)
     return out
