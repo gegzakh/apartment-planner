@@ -22,6 +22,8 @@ const MODELS: [string, string][] = [
 ]
 const AI_PARALLEL = 3
 const JOBS_KEY = 'ap:devinJobs'
+/** Matches MAX_ITEMS in backend/app/devin_jobs.py */
+const DEVIN_BATCH = 60
 const savedJobs = (): string[] => {
   try {
     return JSON.parse(localStorage.getItem(JOBS_KEY) || '[]')
@@ -176,21 +178,34 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
     const p = useStore.getState().plan
     const lit = useStore.getState().lighting
     const sent = items.filter((it) => p.rooms.some((r) => r.id === it.shot.roomId))
-    if (!sent.length) return
-    const job = await devinCreateJob(
-      sent.map((it) => {
-        const room = p.rooms.find((r) => r.id === it.shot.roomId)!
-        return { blob: it.blob, name: it.shot.name, room: room.name, prompt: `${roomPrompt(p, room, lit, extra)} Camera: ${it.shot.name}.` }
-      }),
-    )
-    localStorage.setItem(JOBS_KEY, JSON.stringify([job.id, ...savedJobs()].slice(0, 10)))
-    sent.forEach((it, i) => patchResult(it.id, { job: job.id, index: i }))
+    items.filter((it) => !sent.includes(it)).forEach((it) => patchResult(it.id, { ai: 'error', error: 'Room not found' }))
+    const jobs: DevinJob[] = []
+    for (let k = 0; k < sent.length; k += DEVIN_BATCH) {
+      const part = sent.slice(k, k + DEVIN_BATCH)
+      try {
+        const job = await devinCreateJob(
+          part.map((it) => {
+            const room = p.rooms.find((r) => r.id === it.shot.roomId)!
+            return { blob: it.blob, name: it.shot.name, room: room.name, prompt: `${roomPrompt(p, room, lit, extra)} Camera: ${it.shot.name}.` }
+          }),
+        )
+        jobs.push(job)
+        localStorage.setItem(JOBS_KEY, JSON.stringify([job.id, ...savedJobs()].slice(0, 10)))
+        part.forEach((it, i) => patchResult(it.id, { job: job.id, index: i }))
+      } catch (e) {
+        part.forEach((it) => patchResult(it.id, { ai: 'error', error: (e as Error).message }))
+      }
+    }
+    if (!jobs.length) return setMsg('Could not send the photos to Devin.')
+    const ids = jobs.map((j) => j.id).join(', ')
+    const failed = jobs.find((j) => !j.notified)
     setMsg(
-      job.notified
-        ? `Sent to Devin (job ${job.id}). Photos appear here as they are ready, usually within a few minutes. You can close this window and come back.`
-        : `Saved as job ${job.id}, but Devin was not notified automatically (${job.notifyError}). Tell Devin in chat: “make the photos for job ${job.id}”.`,
+      !failed
+        ? `Sent to Devin (job ${ids}). Photos appear here as they are ready, usually within a few minutes. You can close this window and come back.`
+        : `Saved as job ${ids}, but Devin was not notified automatically (${failed.notifyError}). Tell Devin in chat: “make the photos for job ${ids}”.`,
     )
   }
+
 
   async function go() {
     setBusy(true)
