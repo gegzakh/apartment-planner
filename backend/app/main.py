@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import ai_render
+from . import ai_render, devin_jobs
 from .pdf_import import parse_pdf, render_overlay_png
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
@@ -31,6 +31,8 @@ for d in (FILES, PROJECTS):
 app = FastAPI(title="Apartment Planner")
 ai_render.init(DATA_DIR, FILES)
 app.include_router(ai_render.router)
+devin_jobs.init(DATA_DIR, FILES)
+app.include_router(devin_jobs.router)
 
 
 def _check_id(pid: str) -> str:

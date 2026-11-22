@@ -72,3 +72,33 @@ export async function aiRender(shot: Blob, prompt: string, model: string, signal
   fd.append('model', model)
   return (await (await check(await fetch('/api/ai/render', { method: 'POST', body: fd, signal }))).json()).url
 }
+
+export interface DevinJobItem {
+  index: number
+  name: string
+  room: string
+  result: string | null
+  error?: string | null
+}
+export interface DevinJob {
+  id: string
+  created: number
+  notified: boolean
+  notifyError?: string | null
+  items: DevinJobItem[]
+}
+
+export async function devinStatus(): Promise<{ configured: boolean }> {
+  return (await check(await fetch('/api/devin/status'))).json()
+}
+
+export async function devinCreateJob(items: { blob: Blob; name: string; room: string; prompt: string }[]): Promise<DevinJob> {
+  const fd = new FormData()
+  items.forEach((it, i) => fd.append('images', it.blob, `shot-${i}.jpg`))
+  fd.append('meta', JSON.stringify(items.map(({ name, room, prompt }) => ({ name, room, prompt }))))
+  return (await check(await fetch('/api/devin/jobs', { method: 'POST', body: fd }))).json()
+}
+
+export async function devinJob(id: string): Promise<DevinJob> {
+  return (await check(await fetch(`/api/devin/jobs/${id}`))).json()
+}

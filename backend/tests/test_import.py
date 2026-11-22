@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -92,3 +93,29 @@ def test_ai_render_saves_output(tmp_path, monkeypatch):
     assert r.status_code == 200, r.text
     assert seen == {"token": "r8_test", "model": "depth-dev", "mime": "image/jpeg"}
     assert (tmp_path / r.json()["url"].rsplit("/", 1)[1]).read_bytes().endswith(b"photo")
+
+
+def test_devin_job_roundtrip(tmp_path, monkeypatch):
+    from app import devin_jobs
+
+    for k in ("DEVIN_API_KEY", "DEVIN_ORG_ID", "DEVIN_SESSION_ID"):
+        monkeypatch.delenv(k, raising=False)
+    devin_jobs.init(tmp_path, tmp_path)
+    client = TestClient(app)
+    assert client.get("/api/devin/status").json() == {"configured": False}
+    jpg = b"\xff\xd8\xff\xe0x"
+    r = client.post(
+        "/api/devin/jobs",
+        data={"meta": json.dumps([{"name": "Corner 1", "room": "Kitchen", "prompt": "kitchen"}])},
+        files=[("images", ("a.jpg", jpg, "image/jpeg"))],
+    )
+    assert r.status_code == 200, r.text
+    job = r.json()
+    assert job["notified"] is False and job["items"][0]["result"] is None
+    saved = json.loads((tmp_path / "devin_jobs" / job["id"] / "job.json").read_text())
+    assert saved["items"][0]["prompt"] == "kitchen"
+    r = client.post(f"/api/devin/jobs/{job['id']}/items/0", files={"image": ("p.png", b"\x89PNG\r\n\x1a\nimg", "image/png")})
+    url = r.json()["items"][0]["result"]
+    assert (tmp_path / url.rsplit("/", 1)[1]).read_bytes().endswith(b"img")
+    assert client.get(f"/api/devin/jobs/{job['id']}/shots/0").content == jpg
+    assert client.get("/api/devin/jobs/../x").status_code in (400, 404)

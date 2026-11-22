@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { aiClearToken, aiRender, aiSetToken, aiStatus, type AiStatus } from '../lib/api'
+import { aiClearToken, aiRender, aiSetToken, aiStatus, devinCreateJob, devinJob, devinStatus, type AiStatus, type DevinJob } from '../lib/api'
 import { roomPrompt } from '../lib/aiPrompt'
 import { download, shareFile, slug, type ShareTarget } from '../lib/export'
 import { roomShots, renderShots, type Shot } from '../lib/renders'
@@ -21,6 +21,14 @@ const MODELS: [string, string][] = [
   ['canny-pro', 'Strictest lines & edges (FLUX Canny Pro, ~$0.05)'],
 ]
 const AI_PARALLEL = 3
+const JOBS_KEY = 'ap:devinJobs'
+const savedJobs = (): string[] => {
+  try {
+    return JSON.parse(localStorage.getItem(JOBS_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
 
 interface Result {
   id: string
@@ -32,6 +40,9 @@ interface Result {
   src?: string
   ai?: 'pending' | 'done' | 'error'
   error?: string
+  /** Devin job id and item index */
+  job?: string
+  index?: number
 }
 
 export default function RenderDialog({ onClose }: { onClose: () => void }) {
@@ -50,7 +61,8 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
   const [showSrc, setShowSrc] = useState(false)
   const [msg, setMsg] = useState('')
   const [ai, setAi] = useState<AiStatus | null>(null)
-  const [mode, setMode] = useState<'ai' | '3d'>('ai')
+  const [mode, setMode] = useState<'ai' | 'devin' | '3d'>('devin')
+  const [devinOn, setDevinOn] = useState<boolean | null>(null)
   const [model, setModel] = useState('depth-pro')
   const [extra, setExtra] = useState('')
   const [token, setToken] = useState('')
@@ -62,6 +74,26 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
   }, [viewMode, set])
   useEffect(() => {
     aiStatus().then(setAi).catch(() => setAi({ configured: false, source: null, models: [] }))
+    devinStatus().then((s) => setDevinOn(s.configured)).catch(() => setDevinOn(false))
+    Promise.all(savedJobs().map((id) => devinJob(id).catch(() => null))).then((jobs) => {
+      const ok = jobs.filter((j): j is DevinJob => !!j)
+      localStorage.setItem(JOBS_KEY, JSON.stringify(ok.map((j) => j.id)))
+      if (!alive.current) return
+      const restored = ok.flatMap((j) =>
+        j.items.map((it): Result => ({
+          id: `${j.id}-${it.index}`,
+          shot: { id: `${j.id}-${it.index}`, roomId: '', name: it.name, pos: [0, 0, 0], target: [1, 0, 0], fov: 70 },
+          room: it.room,
+          blob: new Blob(),
+          url: `/api/devin/jobs/${j.id}/shots/${it.index}`,
+          ai: 'pending',
+          job: j.id,
+          index: it.index,
+        })),
+      )
+      setResults((rs) => [...rs, ...restored.filter((r) => !rs.some((x) => x.id === r.id))])
+      restored.forEach((r) => fetch(r.url).then((x) => x.blob()).then((b) => alive.current && patchResult(r.id, { blob: b })).catch(() => {}))
+    })
   }, [])
   const urls = useRef<string[]>([])
   const alive = useRef(true)
@@ -111,12 +143,61 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const fetched = useRef(new Set<string>())
+  const waiting = results.filter((r) => r.job && r.ai === 'pending')
+  const waitKey = [...new Set(waiting.map((r) => r.job))].join(',')
+  useEffect(() => {
+    if (!waitKey) return
+    const poll = async () => {
+      for (const id of waitKey.split(',')) {
+        const j = await devinJob(id).catch(() => null)
+        if (!j || !alive.current) continue
+        for (const it of j.items) {
+          if (!it.result) continue
+          const rid = results.find((r) => r.job === id && r.index === it.index && r.ai === 'pending')?.id
+          if (!rid || fetched.current.has(rid)) continue
+          fetched.current.add(rid)
+          const img = await (await fetch(it.result)).blob()
+          if (!alive.current) return
+          const obj = URL.createObjectURL(img)
+          urls.current.push(obj)
+          setResults((rs) => rs.map((r) => (r.id === rid ? { ...r, src: r.url, url: obj, blob: img, ai: 'done' } : r)))
+        }
+      }
+    }
+    poll()
+    const t = setInterval(poll, 5000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitKey])
+
+  async function askDevin(items: { id: string; shot: Shot; blob: Blob }[]) {
+    const p = useStore.getState().plan
+    const lit = useStore.getState().lighting
+    const sent = items.filter((it) => p.rooms.some((r) => r.id === it.shot.roomId))
+    if (!sent.length) return
+    const job = await devinCreateJob(
+      sent.map((it) => {
+        const room = p.rooms.find((r) => r.id === it.shot.roomId)!
+        return { blob: it.blob, name: it.shot.name, room: room.name, prompt: `${roomPrompt(p, room, lit, extra)} Camera: ${it.shot.name}.` }
+      }),
+    )
+    localStorage.setItem(JOBS_KEY, JSON.stringify([job.id, ...savedJobs()].slice(0, 10)))
+    sent.forEach((it, i) => patchResult(it.id, { job: job.id, index: i }))
+    setMsg(
+      job.notified
+        ? `Sent to Devin (job ${job.id}). Photos appear here as they are ready, usually within a few minutes. You can close this window and come back.`
+        : `Saved as job ${job.id}, but Devin was not notified automatically (${job.notifyError}). Tell Devin in chat: “make the photos for job ${job.id}”.`,
+    )
+  }
+
   async function go() {
     setBusy(true)
     setMsg('')
     cancel.current = false
     const [w3, h3, , wa, ha] = SIZES[size]
-    const [w, h] = useAi ? [wa, ha] : [w3, h3]
+    const toAi = useAi || mode === 'devin'
+    const [w, h] = toAi ? [wa, ha] : [w3, h3]
     const queue: Promise<void>[] = []
     const running = new Set<Promise<void>>()
     try {
@@ -127,9 +208,11 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
         const url = URL.createObjectURL(blob)
         urls.current.push(url)
         const id = `${shot.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-        setResults((rs) => [{ id, shot, room: roomName(shot.roomId), blob, url, ai: useAi ? 'pending' : undefined }, ...rs])
+        setResults((rs) => [{ id, shot, room: roomName(shot.roomId), blob, url, ai: toAi ? 'pending' : undefined }, ...rs])
         items.push({ id, shot, blob })
       }, () => cancel.current || !alive.current)
+      if (mode === 'devin' && !cancel.current && alive.current) await askDevin(items)
+      else if (mode === 'devin') items.forEach((it) => patchResult(it.id, { ai: 'error', error: 'Stopped' }))
       if (useAi) {
         for (const it of items) {
           if (cancel.current || !alive.current) {
@@ -185,8 +268,15 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
         <h3>Room renders <button className="ghost" onClick={onClose}>✕</button></h3>
         <div className="seg render-mode">
           <button className={mode === 'ai' ? 'on' : ''} onClick={() => setMode('ai')}>📷 AI photo (realistic)</button>
+          <button className={mode === 'devin' ? 'on' : ''} onClick={() => setMode('devin')}>🤖 AI photo by Devin (no extra bill)</button>
           <button className={mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>🧊 3D preview (free, instant)</button>
         </div>
+        {mode === 'devin' && (
+          <p className="small muted ai-setup">
+            The app sends the 3D shots and room descriptions to your Devin session, which makes the photos and sends them back here. Uses your Devin plan, takes a few minutes per batch.
+            {devinOn === false && ' Automatic notification is not set up on this server yet, so after sending, tell Devin the job number in chat.'}
+          </p>
+        )}
         {mode === 'ai' && ai && !ai.configured && (
           <div className="ai-setup">
             <p className="small">AI photos are made by <a href="https://replicate.com" target="_blank" rel="noreferrer">Replicate</a> (paid per image). Paste your API token from <a href="https://replicate.com/account/api-tokens" target="_blank" rel="noreferrer">replicate.com/account/api-tokens</a>. It is stored on this server only.</p>
@@ -227,7 +317,7 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
             </label>
           )}
         </div>
-        {useAi && (
+        {(useAi || mode === 'devin') && (
           <div className="ai-extra">
             <label className="small muted">Extra wishes for the photo (optional)
               <textarea rows={2} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. slatted oak cabinet above the washing machine, rain shower head, plants on the shelf" />
@@ -258,11 +348,12 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
         <div className="chips">
           {!busy && (
             <button className="primary" disabled={!chosen.length || (mode === 'ai' && !ai?.configured)} onClick={go}>
-              {useAi ? '📷 Make' : 'Render'} {chosen.length} {useAi ? 'photo' : 'view'}{chosen.length === 1 ? '' : 's'}
+              {mode === 'devin' ? '🤖 Ask Devin for' : useAi ? '📷 Make' : 'Render'} {chosen.length} {useAi || mode === 'devin' ? 'photo' : 'view'}{chosen.length === 1 ? '' : 's'}
             </button>
           )}
           {busy && <button onClick={stop}>Stop</button>}
-          {busy && <span className="small muted">{pending ? `AI photos in progress: ${pending} left (about 10–30 s each)…` : `Rendering… ${results.length} done`}</span>}
+          {!busy && waiting.length > 0 && <span className="small muted">Devin is making {waiting.length} photo{waiting.length === 1 ? '' : 's'}…</span>}
+          {busy && <span className="small muted">{pending && useAi ? `AI photos in progress: ${pending} left (about 10–30 s each)…` : `Rendering… ${results.length} done`}</span>}
           {ready.length > 0 && !busy && <button onClick={() => ready.forEach((r, i) => setTimeout(() => download(r.blob, fname(r)), i * 350))}>⬇ Download all ({ready.length})</button>}
           {results.length > 0 && !busy && <button className="ghost" onClick={() => { setResults([]); setOpenId(null) }}>Clear</button>}
         </div>
@@ -273,7 +364,7 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
             <div className="chips">
               <b className="small">{open.room} · {open.shot.name}</b>
               {open.src && <button className="ghost" onClick={() => setShowSrc(!showSrc)}>{showSrc ? 'Show AI photo' : 'Show 3D source'}</button>}
-              {open.ai === 'error' && <><span className="small" style={{ color: '#c0392b' }}>{open.error}</span><button onClick={() => retry(open)}>Retry AI photo</button></>}
+              {open.ai === 'error' && !open.job && <><span className="small" style={{ color: '#c0392b' }}>{open.error}</span><button onClick={() => retry(open)}>Retry AI photo</button></>}
               <button onClick={() => download(open.blob, fname(open))}>⬇ Download</button>
               <button onClick={() => share(open, 'native')}>Share…</button>
               <button onClick={() => share(open, 'telegram')} style={{ color: '#229ED9' }}>Telegram</button>
@@ -286,7 +377,7 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
           {results.map((r) => (
             <button key={r.id} className={`render-thumb ${openId === r.id ? 'on' : ''}`} onClick={() => { setOpenId(r.id); setShowSrc(false) }} title={`${r.room} · ${r.shot.name}`}>
               <img src={r.url} alt={r.shot.name} />
-              {r.ai === 'pending' && <i className="thumb-badge">AI photo…</i>}
+              {r.ai === 'pending' && <i className="thumb-badge">{r.job ? 'Devin…' : 'AI photo…'}</i>}
               {r.ai === 'error' && <i className="thumb-badge err">AI failed</i>}
               {r.ai === 'done' && <i className="thumb-badge ok">📷</i>}
               <span>{r.room} · {r.shot.name}</span>
