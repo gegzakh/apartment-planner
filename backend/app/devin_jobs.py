@@ -16,6 +16,9 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+from . import ai_render
 
 API = "https://api.devin.ai/v3"
 MAX_SHOT = 8 * 1024 * 1024
@@ -35,9 +38,28 @@ def init(data_dir: Path, files_dir: Path) -> None:
     _jobs_dir.mkdir(parents=True, exist_ok=True)
 
 
+def _key() -> tuple[str | None, str | None]:
+    if os.environ.get("DEVIN_API_KEY"):
+        return os.environ["DEVIN_API_KEY"], "env"
+    k = ai_render._saved().get("devinKey")
+    return (k, "app") if k else (None, None)
+
+
+def _enabled() -> bool:
+    return ai_render._saved().get("devinEnabled", True)
+
+
 def _cfg() -> tuple[str, str, str] | None:
-    key, org, sess = (os.environ.get(k) for k in ("DEVIN_API_KEY", "DEVIN_ORG_ID", "DEVIN_SESSION_ID"))
+    key = _key()[0]
+    org, sess = os.environ.get("DEVIN_ORG_ID"), os.environ.get("DEVIN_SESSION_ID")
     return (key, org, sess) if key and org and sess else None
+
+
+def _write_settings(s: dict) -> None:
+    tmp = ai_render._settings.with_suffix(".tmp")
+    tmp.write_text(json.dumps(s))
+    os.chmod(tmp, 0o600)
+    tmp.replace(ai_render._settings)
 
 
 def _path(job_id: str) -> Path:
@@ -108,11 +130,47 @@ def _public(job: dict) -> dict:
 
 @router.get("/status")
 def status():
-    return {"configured": _cfg() is not None}
+    return {
+        "configured": _cfg() is not None,
+        "enabled": _enabled(),
+        "keySource": _key()[1],
+        "session": bool(os.environ.get("DEVIN_ORG_ID") and os.environ.get("DEVIN_SESSION_ID")),
+    }
+
+
+class SettingsBody(BaseModel):
+    key: str | None = None
+    enabled: bool | None = None
+
+
+@router.put("/settings")
+def set_settings(body: SettingsBody):
+    with _lock:
+        s = ai_render._saved()
+        if body.key is not None:
+            k = body.key.strip()
+            if not k or len(k) > 400:
+                raise HTTPException(400, "Paste a Devin API key")
+            s["devinKey"] = k
+        if body.enabled is not None:
+            s["devinEnabled"] = body.enabled
+        _write_settings(s)
+    return status()
+
+
+@router.delete("/key")
+def clear_key():
+    with _lock:
+        s = ai_render._saved()
+        s.pop("devinKey", None)
+        _write_settings(s)
+    return status()
 
 
 @router.post("/jobs")
 def create_job(images: list[UploadFile] = File(...), meta: str = Form(...)):
+    if not _enabled():
+        raise HTTPException(403, "Devin photos are switched off")
     try:
         items = json.loads(meta)
         assert isinstance(items, list) and len(items) == len(images)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { aiClearToken, aiRender, aiSetToken, aiStatus, devinCreateJob, devinJob, devinStatus, type AiStatus, type DevinJob } from '../lib/api'
+import { aiClearToken, aiRender, aiSetToken, aiStatus, devinClearKey, devinCreateJob, devinJob, devinSettings, devinStatus, type AiStatus, type DevinJob, type DevinStatus } from '../lib/api'
 import { roomPrompt } from '../lib/aiPrompt'
 import { download, shareFile, slug, type ShareTarget } from '../lib/export'
 import { roomShots, renderShots, type Shot } from '../lib/renders'
@@ -64,7 +64,8 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
   const [msg, setMsg] = useState('')
   const [ai, setAi] = useState<AiStatus | null>(null)
   const [mode, setMode] = useState<'ai' | 'devin' | '3d'>('devin')
-  const [devinOn, setDevinOn] = useState<boolean | null>(null)
+  const [devin, setDevin] = useState<DevinStatus | null>(null)
+  const [devinKey, setDevinKey] = useState('')
   const [model, setModel] = useState('depth-pro')
   const [extra, setExtra] = useState('')
   const [token, setToken] = useState('')
@@ -76,7 +77,7 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
   }, [viewMode, set])
   useEffect(() => {
     aiStatus().then(setAi).catch(() => setAi({ configured: false, source: null, models: [] }))
-    devinStatus().then((s) => setDevinOn(s.configured)).catch(() => setDevinOn(false))
+    devinStatus().then(setDevin).catch(() => setDevin(null))
     const ids = savedJobs()
     Promise.all(ids.map((id) => devinJob(id).catch((e: Error) => (/not found|invalid/i.test(e.message) ? 'gone' : null)))).then((jobs) => {
       const ok = jobs.filter((j): j is DevinJob => !!j && j !== 'gone')
@@ -260,6 +261,15 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
     const src = r.src ? await (await fetch(r.src)).blob() : r.blob
     await photo(r.id, r.shot, src)
   }
+  async function devinSet(fn: () => Promise<DevinStatus>) {
+    setMsg('')
+    try {
+      setDevin(await fn())
+      setDevinKey('')
+    } catch (e) {
+      setMsg(String((e as Error).message ?? e))
+    }
+  }
   async function saveToken() {
     setMsg('')
     try {
@@ -288,10 +298,30 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
           <button className={mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>🧊 3D preview (free, instant)</button>
         </div>
         {mode === 'devin' && (
-          <p className="small muted ai-setup">
-            The app sends the 3D shots and room descriptions to your Devin session, which makes the photos and sends them back here. Uses your Devin plan, takes a few minutes per batch.
-            {devinOn === false && ' Automatic notification is not set up on this server yet, so after sending, tell Devin the job number in chat.'}
-          </p>
+          <div className="ai-setup">
+            <label className="chips small">
+              <input type="checkbox" checked={!!devin?.enabled} disabled={!devin} onChange={(e) => devinSet(() => devinSettings({ enabled: e.target.checked }))} />
+              <b>Devin photos {devin?.enabled ? 'on' : 'off'}</b>
+            </label>
+            <p className="small muted">
+              The app sends the 3D shots and room descriptions to your Devin session, which makes the photos and sends them back here. Uses your Devin plan, takes a few minutes per batch.
+            </p>
+            {devin?.enabled && (devin.keySource ? (
+              <div className="chips small">
+                <span>✓ Devin API key saved on the server{devin.keySource === 'env' ? ' (from server environment)' : ''}.</span>
+                {devin.keySource === 'app' && <button className="ghost" onClick={() => devinSet(devinClearKey)}>Remove key</button>}
+              </div>
+            ) : (
+              <>
+                <p className="small">Without a key the job is saved and you tell Devin the job number in chat. To make it automatic, create a service user with the <b>ManageOrgSessions</b> permission in Devin Settings → Service users and paste its API key. It is stored on this server only.</p>
+                <div className="chips">
+                  <input type="password" placeholder="Devin API key" value={devinKey} onChange={(e) => setDevinKey(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+                  <button className="primary" disabled={!devinKey.trim()} onClick={() => devinSet(() => devinSettings({ key: devinKey }))}>Save key</button>
+                </div>
+              </>
+            ))}
+            {devin?.enabled && devin.keySource && !devin.session && <p className="small muted">This server is not linked to a Devin session, so tell Devin the job number in chat.</p>}
+          </div>
         )}
         {mode === 'ai' && ai && !ai.configured && (
           <div className="ai-setup">
@@ -363,7 +393,7 @@ export default function RenderDialog({ onClose }: { onClose: () => void }) {
         </div>
         <div className="chips">
           {!busy && (
-            <button className="primary" disabled={!chosen.length || (mode === 'ai' && !ai?.configured)} onClick={go}>
+            <button className="primary" disabled={!chosen.length || (mode === 'ai' && !ai?.configured) || (mode === 'devin' && !devin?.enabled)} onClick={go}>
               {mode === 'devin' ? '🤖 Ask Devin for' : useAi ? '📷 Make' : 'Render'} {chosen.length} {useAi || mode === 'devin' ? 'photo' : 'view'}{chosen.length === 1 ? '' : 's'}
             </button>
           )}

@@ -88,8 +88,20 @@ export interface DevinJob {
   items: DevinJobItem[]
 }
 
-export async function devinStatus(): Promise<{ configured: boolean }> {
+export interface DevinStatus {
+  configured: boolean
+  enabled: boolean
+  keySource: 'env' | 'app' | null
+  session: boolean
+}
+export async function devinStatus(): Promise<DevinStatus> {
   return (await check(await fetch('/api/devin/status'))).json()
+}
+export async function devinSettings(body: { key?: string; enabled?: boolean }): Promise<DevinStatus> {
+  return (await check(await fetch('/api/devin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))).json()
+}
+export async function devinClearKey(): Promise<DevinStatus> {
+  return (await check(await fetch('/api/devin/key', { method: 'DELETE' }))).json()
 }
 
 export async function devinCreateJob(items: { blob: Blob; name: string; room: string; prompt: string }[]): Promise<DevinJob> {

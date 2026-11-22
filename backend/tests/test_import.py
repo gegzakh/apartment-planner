@@ -102,7 +102,20 @@ def test_devin_job_roundtrip(tmp_path, monkeypatch):
         monkeypatch.delenv(k, raising=False)
     devin_jobs.init(tmp_path, tmp_path)
     client = TestClient(app)
-    assert client.get("/api/devin/status").json() == {"configured": False}
+    from app import ai_render
+
+    ai_render.init(tmp_path, tmp_path)
+    monkeypatch.setenv("DEVIN_ORG_ID", "org-x")
+    monkeypatch.setenv("DEVIN_SESSION_ID", "devin-x")
+    assert client.get("/api/devin/status").json()["configured"] is False
+    st = client.put("/api/devin/settings", json={"key": "k1"}).json()
+    assert st["configured"] and st["keySource"] == "app"
+    assert "k1" not in json.dumps(st)
+    assert client.put("/api/devin/settings", json={"enabled": False}).json()["enabled"] is False
+    off = client.post("/api/devin/jobs", data={"meta": "[{}]"}, files=[("images", ("a.jpg", b"\xff\xd8\xff", "image/jpeg"))])
+    assert off.status_code == 403
+    client.put("/api/devin/settings", json={"enabled": True})
+    assert client.delete("/api/devin/key").json()["configured"] is False
     jpg = b"\xff\xd8\xff\xe0x"
     r = client.post(
         "/api/devin/jobs",
