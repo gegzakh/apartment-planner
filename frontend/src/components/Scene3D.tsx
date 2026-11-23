@@ -337,7 +337,11 @@ function WalkControls({ start, eye }: { start: THREE.Vector3; eye: number }) {
   useEffect(() => {
     camera.position.copy(start)
     camera.position.y = eye
-    const d = (e: KeyboardEvent) => (keys.current[e.code] = true)
+    const d = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return
+      keys.current[e.code] = true
+    }
     const u = (e: KeyboardEvent) => (keys.current[e.code] = false)
     window.addEventListener('keydown', d)
     window.addEventListener('keyup', u)
