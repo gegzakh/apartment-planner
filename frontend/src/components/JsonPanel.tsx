@@ -157,6 +157,14 @@ export default function JsonPanel({ onClose }: { onClose: () => void }) {
           wrap="off"
           onChange={(e) => { setText(e.target.value); setDirty(true) }}
           onScroll={(e) => setScroll(e.currentTarget.scrollTop)}
+          onKeyDown={(e) => {
+            const k = e.key.toLowerCase()
+            if (dirty || !(e.ctrlKey || e.metaKey) || (k !== 'z' && k !== 'y')) return
+            e.preventDefault()  // nothing typed here yet: undo/redo the plan itself
+            const st = useStore.getState()
+            if (k === 'y' || e.shiftKey) st.redo()
+            else st.undo()
+          }}
           onClick={pickAtCaret}
           onKeyUp={(e) => e.key.startsWith('Arrow') || e.key === 'PageUp' || e.key === 'PageDown' ? pickAtCaret() : undefined}
           onBlur={() => { if (dirty && apply()) setDirty(false) }}
