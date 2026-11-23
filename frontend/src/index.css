@@ -99,7 +99,14 @@ table.q th { color: var(--muted); font-weight: 500; }
 .card b { font-size: 13px; }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #24262b; color: #fff; padding: 9px 16px; border-radius: 8px; z-index: 60; max-width: 80vw; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2); }
 .preview-img { max-width: 100%; max-height: 320px; display: block; margin: 0 auto 10px; border-radius: 8px; border: 1px solid var(--border); }
-textarea.json { width: 100%; height: 60vh; font: 12px/1.4 ui-monospace, Consolas, monospace; }
+.main.with-json { grid-template-columns: 230px 1fr minmax(320px, 28vw) 290px; }
+.json-side { display: flex; flex-direction: column; border-left: 1px solid var(--border); overflow: hidden; }
+.json-head { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.json-help { margin: 6px 8px; }
+.json-wrap { position: relative; flex: 1; min-height: 0; background: #fff; overflow: hidden; }
+.json-hl { position: absolute; left: 0; right: 0; background: #fff2b8; border-left: 3px solid #e0a800; pointer-events: none; }
+.json-edit { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; border: 0; border-radius: 0; padding: 8px; background: transparent; white-space: pre; overflow: auto; font: 12px/17px ui-monospace, Consolas, monospace; }
+.json-err { padding: 6px 8px; color: var(--danger); border-top: 1px solid var(--border); }
 .kbd { font: 11px ui-monospace, monospace; background: #f1f0ec; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 
 .mobile-only { display: none; }
@@ -111,6 +118,8 @@ textarea.json { width: 100%; height: 60vh; font: 12px/1.4 ui-monospace, Consolas
   .side.left.open { display: block; position: absolute; top: 0; left: 0; bottom: 0; width: min(280px, 85vw); z-index: 40; box-shadow: 4px 0 16px rgba(0, 0, 0, 0.18); }
   .side.right { max-height: 40vh; border-left: 0; border-top: 1px solid var(--border); }
   .stage.split { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .main.with-json { grid-template-columns: 1fr; grid-template-rows: 1fr 40vh auto; }
+  .json-side { border-left: 0; border-top: 1px solid var(--border); }
 }
 
 /* room renders */
