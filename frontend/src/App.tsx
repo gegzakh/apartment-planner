@@ -211,7 +211,7 @@ export default function App() {
             </div>
           )}
         </div>
-        {jsonOpen && <JsonPanel onClose={() => setJsonOpen(false)} />}
+        {jsonOpen && <JsonPanel key={projectId} onClose={() => setJsonOpen(false)} />}
         <RightPanel />
       </div>
       {dialog === 'import' && <ImportDialog onClose={() => setDialog(null)} onSample={loadSample} />}
