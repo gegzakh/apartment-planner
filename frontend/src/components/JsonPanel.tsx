@@ -43,6 +43,19 @@ function parse(text: string): Plan {
   const p = JSON.parse(text) as Plan
   if (!Array.isArray(p.walls) || !p.settings) throw new Error('Not a plan: "walls" and "settings" are required')
   for (const k of LISTS) p[k] ??= [] as never
+  const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
+  const pt = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(num)
+  const need = (list: unknown[], name: string, ok: (o: Record<string, unknown>) => boolean, what: string) =>
+    list.forEach((o, i) => {
+      if (!o || typeof o !== 'object' || !ok(o as Record<string, unknown>)) throw new Error(`${name}[${i}] needs ${what}`)
+    })
+  need(p.walls, 'walls', (o) => pt(o.a) && pt(o.b) && num(o.thickness), '"a" and "b" points and a "thickness"')
+  need(p.openings, 'openings', (o) => typeof o.wallId === 'string' && num(o.offset) && num(o.width), '"wallId", "offset" and "width"')
+  need(p.rooms, 'rooms', (o) => Array.isArray(o.polygon) && o.polygon.every(pt), 'a "polygon" of [x, y] points')
+  need(p.furniture, 'furniture', (o) => num(o.x) && num(o.y) && num(o.width) && num(o.depth), '"x", "y", "width" and "depth"')
+  need([...p.electrical, ...p.plumbing], 'fixtures', (o) => num(o.x) && num(o.y), '"x" and "y"')
+  need(p.runs, 'runs', (o) => Array.isArray(o.points) && o.points.every(pt), '"points" of [x, y]')
+  need(p.viewpoints, 'viewpoints', (o) => num(o.x) && num(o.y), '"x" and "y"')
   return p
 }
 
