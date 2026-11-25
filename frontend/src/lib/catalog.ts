@@ -8,6 +8,8 @@ export interface FurnitureDef {
   h: number
   color: string
   category: string
+  /** Mounting height of the bottom above the floor (wall-hung items). */
+  elev?: number
 }
 
 export const FURNITURE: FurnitureDef[] = [
@@ -26,6 +28,7 @@ export const FURNITURE: FurnitureDef[] = [
   { type: 'bed_single', label: 'Single bed', w: 0.9, d: 2.0, h: 0.5, color: '#d9d2c5', category: 'Bedroom' },
   { type: 'nightstand', label: 'Nightstand', w: 0.45, d: 0.4, h: 0.5, color: '#8b6b4a', category: 'Bedroom' },
   { type: 'wardrobe', label: 'Wardrobe', w: 1.8, d: 0.6, h: 2.3, color: '#e8e2d6', category: 'Bedroom' },
+  { type: 'bedside_vanity', label: 'Bedside vanity (nightstand + vanity)', w: 1.0, d: 0.45, h: 0.76, color: '#e8e2d6', category: 'Bedroom' },
   { type: 'dresser', label: 'Dresser', w: 1.2, d: 0.5, h: 0.85, color: '#8b6b4a', category: 'Bedroom' },
   { type: 'desk', label: 'Desk', w: 1.4, d: 0.7, h: 0.75, color: '#b89a74', category: 'Office' },
   { type: 'office_chair', label: 'Office chair', w: 0.6, d: 0.6, h: 1.1, color: '#2f2f2f', category: 'Office' },
@@ -43,6 +46,7 @@ export const FURNITURE: FurnitureDef[] = [
   { type: 'bathtub', label: 'Bathtub', w: 1.7, d: 0.75, h: 0.58, color: '#ffffff', category: 'Bathroom' },
   { type: 'shower', label: 'Shower tray', w: 0.9, d: 0.9, h: 2.0, color: '#e6f2f7', category: 'Bathroom' },
   { type: 'washing_machine', label: 'Washing machine', w: 0.6, d: 0.6, h: 0.85, color: '#eef0f2', category: 'Bathroom' },
+  { type: 'top_cabinet', label: 'Top cabinet (wall-mounted)', w: 0.8, d: 0.35, h: 0.6, color: '#f0ece4', category: 'Storage', elev: 1.5 },
   { type: 'cabinet', label: 'Cabinet', w: 1.0, d: 0.5, h: 0.9, color: '#d9cbb4', category: 'Storage' },
   { type: 'generic', label: 'Imported block', w: 1.0, d: 1.0, h: 0.75, color: '#c8c2b8', category: 'Storage' },
 ]

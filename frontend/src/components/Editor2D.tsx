@@ -287,7 +287,7 @@ export default function Editor2D() {
       const def = FURNITURE_BY_TYPE[toolArg] ?? FURNITURE_BY_TYPE.cabinet
       const id = uid('f')
       const sp = snapPt(p)
-      update((d) => void d.furniture.push({ id, type: def.type, x: sp[0], y: sp[1], rotation: 0, width: def.w, depth: def.d, height: def.h, color: def.color }))
+      update((d) => void d.furniture.push({ id, type: def.type, x: sp[0], y: sp[1], rotation: 0, width: def.w, depth: def.d, height: def.h, color: def.color, ...(def.elev ? { elevation: def.elev } : {}) }))
       select({ kind: 'furniture', id })
       return
     }
@@ -729,6 +729,18 @@ function FurnitureShape({ f, selected, px }: { f: Furniture; selected: boolean; 
       }
       case 'washing_machine':
         return <circle r={Math.min(w, d) * 0.32} fill="#fff" stroke={stroke} strokeWidth={sw} />
+      case 'top_cabinet':
+        return <path d={`M${-w / 2} ${-d / 2} L${w / 2} ${d / 2} M${w / 2} ${-d / 2} L${-w / 2} ${d / 2}`} stroke={stroke} strokeWidth={sw * 0.7} strokeDasharray={`${4 * px} ${3 * px}`} />
+      case 'bedside_vanity': {
+        const cw = Math.min(0.42, w * 0.45)
+        return (
+          <g>
+            <line x1={-w / 2 + cw} y1={-d / 2} x2={-w / 2 + cw} y2={d / 2} stroke={stroke} strokeWidth={sw} />
+            {[1, 2].map((i) => <line key={i} x1={-w / 2} y1={-d / 2 + (d * i) / 3} x2={-w / 2 + cw} y2={-d / 2 + (d * i) / 3} stroke={stroke} strokeWidth={sw * 0.6} />)}
+            <rect x={-w / 2 + cw + 0.05} y={-d / 2} width={w - cw - 0.1} height={0.03} fill="#dfe6ea" stroke={stroke} strokeWidth={sw * 0.6} />
+          </g>
+        )
+      }
       case 'wardrobe':
       case 'cabinet':
         return <path d={`M${-w / 2} ${-d / 2} L${w / 2} ${d / 2} M${w / 2} ${-d / 2} L${-w / 2} ${d / 2}`} stroke={stroke} strokeWidth={sw * 0.7} strokeOpacity={0.6} />

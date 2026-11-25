@@ -265,6 +265,29 @@ function Body({ f }: { f: Furniture }) {
         </group>
       )
     }
+    case 'top_cabinet':
+      // hung on the wall: the group is already raised by f.elevation
+      return (
+        <group>
+          <B p={[0, h / 2, -0.01]} s={[w, h, d - 0.02]} c={c} />
+          <Fronts w={w} h={h} y={h / 2} z={d / 2 - 0.02} n={w > 0.6 ? 2 : 1} c={c} />
+        </group>
+      )
+    case 'bedside_vanity': {
+      // nightstand drawer column + vanity top with knee space, side panel and wall mirror
+      const cw = Math.min(0.42, w * 0.45)
+      const cx = -w / 2 + cw / 2
+      return (
+        <group>
+          <B p={[0, h - 0.015, 0]} s={[w, 0.03, d]} c={c} />
+          <B p={[cx, (h - 0.03) / 2, -0.01]} s={[cw, h - 0.03, d - 0.02]} c={c} />
+          <Fronts w={cw} h={h - 0.05} y={(h - 0.03) / 2} z={d / 2 - 0.01} n={3} c={c} drawers />
+          <B p={[w / 2 - 0.015, (h - 0.03) / 2, 0]} s={[0.03, h - 0.03, d]} c={c} />
+          <B p={[(cw - 0.03) / 2, h - 0.1, d / 2 - 0.02]} s={[w - cw - 0.03, 0.12, 0.02]} c={c} />
+          <Mirror p={[(cw - 0.03) / 2, h + 0.4, -d / 2 + 0.01]} s={[Math.min(0.6, w - cw - 0.1), 0.6, 0.015]} />
+        </group>
+      )
+    }
     case 'kitchen_wall':
       return (
         <group>

@@ -208,7 +208,7 @@ export default function Inspector() {
       <div className="section">
         {header(FURNITURE_BY_TYPE[f.type]?.label ?? 'Furniture')}
         <label className="row"><span>Type</span>
-          <select value={f.type} onChange={(e) => patch<Furniture>((x) => { const d = FURNITURE_BY_TYPE[e.target.value]; x.type = e.target.value; if (d) { x.width = d.w; x.depth = d.d; x.height = d.h; x.color = d.color } })}>
+          <select value={f.type} onChange={(e) => patch<Furniture>((x) => { const d = FURNITURE_BY_TYPE[e.target.value]; x.type = e.target.value; if (d) { x.width = d.w; x.depth = d.d; x.height = d.h; x.color = d.color; x.elevation = d.elev } })}>
             {f.type === 'generic' && <option value="generic">From drawing</option>}
             {FURNITURE.map((d) => <option key={d.type} value={d.type}>{d.category} · {d.label}</option>)}
           </select>
@@ -218,6 +218,7 @@ export default function Inspector() {
           <Num label="Depth" value={f.depth} onChange={(v) => patch<Furniture>((x) => (x.depth = v))} />
           <Num label="Height" value={f.height} onChange={(v) => patch<Furniture>((x) => (x.height = v))} />
           <Num label="Rotation" unit="°" step={15} value={f.rotation} onChange={(v) => patch<Furniture>((x) => (x.rotation = ((v % 360) + 360) % 360))} />
+          {f.type === 'top_cabinet' && <Num label="Above floor" value={f.elevation ?? 0} onChange={(v) => patch<Furniture>((x) => (x.elevation = Math.max(0, v)))} />}
         </div>
         <div className="chips" style={{ marginBottom: 8 }}>
           <button onClick={() => patch<Furniture>((x) => (x.rotation = (x.rotation + 90) % 360))}>⟳ 90°</button>

@@ -48,7 +48,7 @@ export const STYLE_BY_KEY: Record<string, RoomStyle> = Object.fromEntries(ROOM_S
 
 const SOFT = new Set(['sofa', 'sofa_corner', 'armchair', 'bed', 'bed_single', 'rug', 'office_chair', 'chair'])
 const WOOD = new Set(['coffee_table', 'tv_stand', 'bookshelf', 'table', 'table_round', 'nightstand', 'dresser', 'desk'])
-const CABINET = new Set(['wardrobe', 'kitchen_base', 'kitchen_wall', 'kitchen_sink', 'island', 'cabinet'])
+const CABINET = new Set(['wardrobe', 'kitchen_base', 'kitchen_wall', 'kitchen_sink', 'island', 'cabinet', 'top_cabinet', 'bedside_vanity'])
 const WET = /bath|toilet|wc|shower|сануз|ванн/i
 
 /** Applies a style to a room: its surfaces and the furniture standing inside it. Mutates the plan draft. */
