@@ -43,13 +43,15 @@ export function healRoomsAfterWallRemoval(d: Plan, removed: Wall[]) {
       const spans = polygonClipping.intersection(ring(r.polygon), probe).map((p) => {
         const pts = p[0] as Vec2[]
         const ts = pts.map((q) => (q[0] - w.a[0]) * u[0] + (q[1] - w.a[1]) * u[1])
-        const ks = pts.reduce((m, q) => m + (q[0] - w.a[0]) * n[0] + (q[1] - w.a[1]) * n[1], 0)
-        return { t0: Math.min(...ts), t1: Math.max(...ts), side: ks > 0 }
+        const ks = pts.map((q) => (q[0] - w.a[0]) * n[0] + (q[1] - w.a[1]) * n[1])
+        // a room already joined across a neighbouring removed segment can reach both sides
+        const both = Math.min(...ks) < -w.thickness / 4 && Math.max(...ks) > w.thickness / 4
+        return { t0: Math.min(...ts), t1: Math.max(...ts), side: both ? null : ks.reduce((a, b) => a + b, 0) > 0 }
       })
       return spans.length ? [{ r, spans }] : []
     })
     // half the wall strip goes to the room on that side; where rooms face each other the whole strip joins them
-    const fill = (x: (typeof touching)[number]) => x.spans.map((s) => (s.side ? rect(s.t0, s.t1, 0, h) : rect(s.t0, s.t1, -h, 0)))
+    const fill = (x: (typeof touching)[number]) => x.spans.map((s) => rect(s.t0, s.t1, s.side === true ? 0 : -h, s.side === false ? 0 : h))
     const group = touching.map((_, i) => i)
     const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])))
     const bridges: { i: number; poly: Polygon }[] = []
