@@ -883,7 +883,7 @@ def _classify_box(box, items, mpp):
         return "stove"
     if bowls and any(b[0] <= d[0] and b[1] <= d[1] and d[2] <= b[2] and d[3] <= b[3] for b in bowls for d in drains):
         return "basin"
-    if bowls and min(size(bowls[0])) >= 0.5 and len(ells) == 1:
+    if bowls and min(size(bowls[0])) >= 0.5 and max(size(bowls[0])) < 1.15 * min(size(bowls[0])) and len(ells) == 1:
         return "table_round"
     small = [s for g in groups for s in g if max(size(_bbox(s))) < 0.3]
     for g in _clumps(small):
