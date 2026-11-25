@@ -225,18 +225,25 @@ function Body({ f }: { f: Furniture }) {
     case 'kitchen_base':
     case 'kitchen_sink':
     case 'stove':
+    case 'oven':
     case 'dishwasher':
       return (
         <group>
           <B p={[0, (h - 0.04) / 2 + 0.05, 0]} s={[w - 0.004, h - 0.09, d - 0.02]} c={f.type === 'stove' ? '#e8e8e8' : c} />
           <B p={[0, 0.025, 0.02]} s={[w, 0.05, d - 0.05]} c="#333" />
           <B p={[0, h - 0.02, 0]} s={[w, 0.04, d]} c="#d8d3cb" r={0.3} />
-          {f.type !== 'stove' && f.type !== 'dishwasher' && <Fronts w={w} h={h - 0.1} y={(h - 0.04) / 2 + 0.05} z={d / 2 - 0.005} n={w > 0.7 ? 2 : 1} c={c} />}
+          {f.type !== 'stove' && f.type !== 'oven' && f.type !== 'dishwasher' && <Fronts w={w} h={h - 0.1} y={(h - 0.04) / 2 + 0.05} z={d / 2 - 0.005} n={w > 0.7 ? 2 : 1} c={c} />}
           {f.type === 'dishwasher' && <Fronts w={w} h={h - 0.1} y={(h - 0.04) / 2 + 0.05} z={d / 2 - 0.005} n={1} c={c} drawers />}
           {f.type === 'stove' && (
             <>
               <B p={[0, h + 0.001, 0]} s={[w - 0.06, 0.005, d - 0.08]} c="#111" r={0.1} />
               {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b], i) => <Disc key={i} p={[a * w * 0.2, h + 0.005, b * d * 0.2]} r={0.08} h={0.002} c="#3a3a3a" ro={0.3} />)}
+              <B p={[0, 0.45, d / 2 - 0.005]} s={[w - 0.04, 0.5, 0.02]} c="#1b1b1b" r={0.1} />
+              <B p={[0, 0.74, d / 2 + 0.015]} s={[w * 0.7, 0.015, 0.02]} c={CHROME} m={0.8} r={0.3} />
+            </>
+          )}
+          {f.type === 'oven' && (
+            <>
               <B p={[0, 0.45, d / 2 - 0.005]} s={[w - 0.04, 0.5, 0.02]} c="#1b1b1b" r={0.1} />
               <B p={[0, 0.74, d / 2 + 0.015]} s={[w * 0.7, 0.015, 0.02]} c={CHROME} m={0.8} r={0.3} />
             </>

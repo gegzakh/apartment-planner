@@ -690,6 +690,20 @@ function FurnitureShape({ f, selected, px }: { f: Furniture; selected: boolean; 
         return <rect x={-w / 2 + 0.08} y={-d / 2 + 0.08} width={w - 0.16} height={d - 0.16} rx={0.25} fill="#fff" stroke={stroke} strokeWidth={sw} />
       case 'stove':
         return <g>{[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b], i) => <circle key={i} cx={(a * w) / 4.5} cy={(b * d) / 4.5} r={Math.min(w, d) / 7} fill="none" stroke={stroke} strokeWidth={sw} />)}</g>
+      case 'fridge': {
+        const r = Math.min(w, d) / 4
+        return <path d={`M${-r} 0 L${r} 0 M0 ${-r} L0 ${r} M${-r * 0.7} ${-r * 0.7} L${r * 0.7} ${r * 0.7} M${r * 0.7} ${-r * 0.7} L${-r * 0.7} ${r * 0.7}`} stroke={stroke} strokeWidth={sw} />
+      }
+      case 'oven': {
+        const r = Math.min(w, d) / 4
+        return <path d={`M${r * 0.3} ${-r} L${-r * 0.4} ${r * 0.1} L${r * 0.4} ${-r * 0.1} L${-r * 0.3} ${r}`} fill="none" stroke={stroke} strokeWidth={sw} />
+      }
+      case 'dishwasher': {
+        const r = Math.min(w, d) / 5
+        return <path d={`M0 ${-r * 1.4} L${r * 0.75} ${r * 0.1} A${r * 0.8} ${r * 0.8} 0 1 1 ${-r * 0.75} ${r * 0.1} Z`} fill="none" stroke={stroke} strokeWidth={sw} />
+      }
+      case 'washing_machine':
+        return <circle r={Math.min(w, d) * 0.32} fill="#fff" stroke={stroke} strokeWidth={sw} />
       case 'wardrobe':
       case 'cabinet':
         return <path d={`M${-w / 2} ${-d / 2} L${w / 2} ${d / 2} M${w / 2} ${-d / 2} L${-w / 2} ${d / 2}`} stroke={stroke} strokeWidth={sw * 0.7} strokeOpacity={0.6} />

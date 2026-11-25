@@ -632,7 +632,9 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
                     parts += [[(x + r[0]) / R.res, (y + r[1]) / R.res, (x + r[2]) / R.res, (y + r[3]) / R.res] for r in pieces]
                     continue
         clusters.append(box)
-    clusters = _merge_contained(clusters) + parts
+    # small icons drawn with 45° strokes (fridge snowflake) can be mistaken for hatching
+    icon_strokes = [[s.a, s.b] for s in ex.segs if s.kind == "hatch" and s.length * m_per_pt < 0.3]
+    clusters = _recognise_symbols(_merge_contained(clusters) + parts, furn_geo + icon_strokes, m_per_pt)
 
     # --- convert to metres ---
     all_pts = [p for r in rects_px for p in ((r[0], r[1]), (r[2], r[3]))]
@@ -716,7 +718,7 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
     _name_rooms(rooms)
 
     furniture = []
-    for (x0, y0, x1, y1) in clusters:
+    for (x0, y0, x1, y1), known, axis in clusters:
         a, b = M(x0, y0), M(x1, y1)
         wdt, dep = b[0] - a[0], b[1] - a[1]
         cx, cy = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
@@ -724,7 +726,7 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
         paths = []
         crosses = 0
         side = min(x1 - x0, y1 - y0)
-        for g in furn_geo:
+        for g in furn_geo + icon_strokes:
             if all(x0 - 0.5 <= p[0] <= x1 + 0.5 and y0 - 0.5 <= p[1] <= y1 + 0.5 for p in g):
                 pts = [M(*p) for p in g]
                 paths.append("M" + " L".join(f"{p[0] - cx:.3f} {p[1] - cy:.3f}" for p in pts))
@@ -734,11 +736,23 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
         ftype, height = _guess_furniture(wdt, dep)
         if crosses >= 2 and min(wdt, dep) >= 0.3:
             ftype, height = "wardrobe", 2.2  # a box with an X is a tall cabinet in plan drawings
+        if known:
+            ftype, height = known, APPLIANCE_H[known]
+        rot = _wall_side((x0, y0, x1, y1), walls, R.res, axis) if ftype in FACING else 0
+        if rot in (90, 270):
+            wdt, dep = dep, wdt
+        if rot:
+            c, s_ = math.cos(math.radians(rot)), math.sin(math.radians(rot))
+            # outline was drawn unrotated; express it in the item's own frame
+            paths = ["M" + " L".join(f"{(px * c + py * s_):.3f} {(-px * s_ + py * c):.3f}"
+                                     for px, py in (map(float, q.split()) for q in p[1:].split(" L")))
+                     for p in paths]
         furniture.append({
-            "id": _id("f"), "type": ftype, "x": round(cx, 3), "y": round(cy, 3), "rotation": 0,
+            "id": _id("f"), "type": ftype, "x": round(cx, 3), "y": round(cy, 3), "rotation": rot,
             "width": round(wdt, 3), "depth": round(dep, 3), "height": height,
             "outline": " ".join(paths)[:20000],
         })
+    _washers_in_bathrooms(furniture, rooms)
 
     page_origin = M(0, 0)
     overlay = {
@@ -758,6 +772,259 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
                   "furniture": len(furniture)},
     }
 
+
+
+# --- appliance / fixture symbols inside furniture outlines ---
+
+APPLIANCE_H = {"stove": 0.9, "oven": 0.9, "dishwasher": 0.85, "fridge": 1.85, "kitchen_sink": 0.9,
+               "kitchen_base": 0.9, "toilet": 0.75, "basin": 0.85, "washing_machine": 0.85, "table_round": 0.75}
+FACING = {"stove", "oven", "dishwasher", "fridge", "kitchen_sink", "kitchen_base", "toilet", "basin", "washing_machine"}
+
+
+def _bbox(pts):
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _chains(items, tol=0.4):
+    """Group polylines that share endpoints (circles drawn as 4 arcs, outlines drawn as segments)."""
+    par = list(range(len(items)))
+
+    def find(i):
+        while par[i] != i:
+            par[i] = par[par[i]]
+            i = par[i]
+        return i
+    ends = [(g[0], g[-1]) for g in items]
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            if any(math.dist(p, q) < tol for p in ends[i] for q in ends[j]):
+                par[find(i)] = find(j)
+    groups = {}
+    for i in range(len(items)):
+        groups.setdefault(find(i), []).append(items[i])
+    return list(groups.values())
+
+
+def _clumps(items, gap=1.0):
+    """Group small strokes that sit close together (one drawn icon)."""
+    boxes = [_bbox(g) for g in items]
+    par = list(range(len(items)))
+
+    def find(i):
+        while par[i] != i:
+            par[i] = par[par[i]]
+            i = par[i]
+        return i
+    for i, a in enumerate(boxes):
+        for j in range(i + 1, len(boxes)):
+            b = boxes[j]
+            if a[0] - gap <= b[2] and b[0] - gap <= a[2] and a[1] - gap <= b[3] and b[1] - gap <= a[3]:
+                par[find(i)] = find(j)
+    groups = {}
+    for i in range(len(items)):
+        groups.setdefault(find(i), []).append(items[i])
+    return list(groups.values())
+
+
+def _ellipse(group):
+    pts = [p for g in group for p in g]
+    if len(pts) < 12:
+        return None
+    x0, y0, x1, y1 = _bbox(pts)
+    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
+    if min(rx, ry) < 0.5:
+        return None
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    if all(abs(((p[0] - cx) / rx) ** 2 + ((p[1] - cy) / ry) ** 2 - 1) < 0.2 for p in pts):
+        return (x0, y0, x1, y1)
+    return None
+
+
+def _seg_dist(p, a, b):
+    ab = (b[0] - a[0], b[1] - a[1])
+    L2 = ab[0] ** 2 + ab[1] ** 2 or 1e-9
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / L2))
+    return math.dist(p, (a[0] + t * ab[0], a[1] + t * ab[1]))
+
+
+def _steep(a, b):
+    ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 180
+    return 45 < ang < 82 or 98 < ang < 135
+
+
+def _flat(a, b):
+    ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 180
+    return ang < 8 or ang > 172 or 82 <= ang <= 98
+
+
+def _classify_box(box, items, mpp):
+    """Recognise what a furniture outline is from the symbol drawn inside it."""
+    x0, y0, x1, y1 = box
+    W, D = (x1 - x0) * mpp, (y1 - y0) * mpp
+    lo, hi = sorted((W, D))
+    m = 0.8
+
+    def on_border(g):
+        return all(abs(p[0] - x0) < m or abs(p[0] - x1) < m or abs(p[1] - y0) < m or abs(p[1] - y1) < m for p in g)
+    inner = [g for g in items if not on_border(g)]
+    if not inner:
+        return None
+    groups = _chains(inner)
+    ells, others = [], []
+    for g in groups:
+        e = _ellipse(g)
+        (ells if e else others).append(e or g)
+    size = lambda b: ((b[2] - b[0]) * mpp, (b[3] - b[1]) * mpp)
+    drains = [e for e in ells if max(size(e)) < 0.08]
+    burners = [e for e in ells if 0.08 <= min(size(e)) and max(size(e)) <= 0.32 and max(size(e)) < 1.3 * min(size(e))]
+    bowls = [e for e in ells if min(size(e)) >= 0.2]
+    if len(burners) >= 3 and hi <= 1.0:
+        return "stove"
+    if bowls and any(b[0] <= d[0] and b[1] <= d[1] and d[2] <= b[2] and d[3] <= b[3] for b in bowls for d in drains):
+        return "basin"
+    if bowls and min(size(bowls[0])) >= 0.5 and len(ells) == 1:
+        return "table_round"
+    small = [s for g in groups for s in g if max(size(_bbox(s))) < 0.3]
+    for g in _clumps(small):
+        segs = [s for s in g if len(s) == 2]
+        curves = [s for s in g if len(s) > 2]
+        bx = _bbox([p for s in g for p in s])
+        gw, gh = size(bx)
+        if max(gw, gh) > 0.4:
+            continue
+        # snowflake: horizontal, vertical and both diagonals crossing at one point
+        mids = [((s[0][0] + s[1][0]) / 2, (s[0][1] + s[1][1]) / 2, round((math.degrees(math.atan2(s[1][1] - s[0][1], s[1][0] - s[0][0])) % 180) / 45) % 4)
+                for s in segs if math.dist(*s) * mpp > 0.2 * max(gw, gh)]
+        for mx, my, _ in mids:
+            if len({k for ax, ay, k in mids if math.hypot(ax - mx, ay - my) < 1.0}) == 4:
+                return "fridge"
+        # lightning bolt: steep - flat - steep zigzag
+        if not curves and len(segs) >= 3:
+            for s in segs:
+                if _flat(*s) and math.dist(*s) * mpp < 0.15:
+                    nb = [t for t in segs if t is not s and _steep(*t) and min(_seg_dist(q, *s) for q in t) < 0.4]
+                    if len(nb) >= 2:
+                        return "oven"
+        # water drop: two steep lines meeting at an apex, closed by a curve
+        if curves and len(segs) == 2 and _steep(*segs[0]) and _steep(*segs[1]) and \
+                any(math.dist(p, q) < 0.4 for p in segs[0] for q in segs[1]):
+            return "dishwasher"
+    # finely drawn rounded bowl filling the outline, without a drain: toilet
+    if 0.28 <= lo <= 0.55 and 0.35 <= hi <= 0.85 and not drains:
+        for g in others:
+            gw, gh = size(_bbox([p for s in g for p in s]))
+            if len(g) >= 40 and gw >= 0.7 * W and gh >= 0.7 * D:
+                return "toilet"
+    # sink: large inner basin outline with a narrow tap
+    if 0.4 <= lo <= 0.75 and hi <= 1.6 and not ells:
+        rects = [_bbox([p for s in g for p in s]) for g in others]
+        tap = any(min(size(r)) < 0.06 and 0.08 <= max(size(r)) <= 0.4 for r in rects)
+        basin = any(size(r)[0] * size(r)[1] >= 0.35 * W * D for r in rects)
+        if tap and basin:
+            return "kitchen_sink"
+    return None
+
+
+def _split_run(box, items, mpp):
+    """Cut a counter/cabinet run into its units along full-depth divider lines."""
+    x0, y0, x1, y1 = box
+    horiz = (x1 - x0) >= (y1 - y0)
+    depth = (y1 - y0) if horiz else (x1 - x0)
+    a0, a1 = (x0, x1) if horiz else (y0, y1)
+    cuts = []
+    for g in items:
+        if len(g) != 2:
+            continue
+        (px, py), (qx, qy) = g
+        if horiz and abs(px - qx) < 0.3 and abs(py - qy) >= 0.85 * depth:
+            cuts.append((px + qx) / 2)
+        elif not horiz and abs(py - qy) < 0.3 and abs(px - qx) >= 0.85 * depth:
+            cuts.append((py + qy) / 2)
+    edges = [a0]
+    for c in sorted(cuts):
+        if c - edges[-1] >= 0.25 / mpp and a1 - c >= 0.25 / mpp:
+            edges.append(c)
+    edges.append(a1)
+    return [[e0, y0, e1, y1] if horiz else [x0, e0, x1, e1] for e0, e1 in zip(edges, edges[1:])]
+
+
+def _wall_side(box, wall_mask, res, axis=None):
+    """Rotation (deg) that puts the back of an item against its nearest wall."""
+    x0, y0, x1, y1 = (int(v * res) for v in box)
+    h, w = wall_mask.shape
+    g = int(0.6 * res) + 3
+    strips = {
+        0: wall_mask[max(0, y0 - g):max(0, y0 - 1), x0:x1],      # wall above -> front faces down
+        180: wall_mask[min(h, y1 + 1):min(h, y1 + g), x0:x1],    # wall below
+        270: wall_mask[y0:y1, max(0, x0 - g):max(0, x0 - 1)],    # wall left
+        90: wall_mask[y0:y1, min(w, x1 + 1):min(w, x1 + g)],     # wall right
+    }
+    keep = {"h": (0, 180), "v": (90, 270)}.get(axis, tuple(strips))  # units of a run face across it
+    score = {k: (s.mean() if s.size else 0) for k, s in strips.items() if k in keep}
+    best = max(score, key=score.get)
+    return best if score[best] > 0 else 0
+
+
+def _join_runs(boxes, gap):
+    """Re-join pieces of one counter run that the raster split (same depth, touching ends)."""
+    boxes = [list(b) for b in boxes]
+    merged = True
+    while merged:
+        merged = False
+        for i, a in enumerate(boxes):
+            for j in range(i + 1, len(boxes)):
+                b = boxes[j]
+                same_row = abs(a[1] - b[1]) < 1 and abs(a[3] - b[3]) < 1 and -1 < max(a[0], b[0]) - min(a[2], b[2]) < gap
+                same_col = abs(a[0] - b[0]) < 1 and abs(a[2] - b[2]) < 1 and -1 < max(a[1], b[1]) - min(a[3], b[3]) < gap
+                if same_row or same_col:
+                    boxes[i] = [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
+                    del boxes[j]
+                    merged = True
+                    break
+            if merged:
+                break
+    return boxes
+
+
+def _recognise_symbols(clusters, furn_geo, mpp):
+    """Returns [(box, type|None)] with counter runs split into typed units and symbol icons absorbed."""
+    inside = lambda g, b: all(b[0] - 1.5 <= p[0] <= b[2] + 1.5 and b[1] - 1.5 <= p[1] <= b[3] + 1.5 for p in g)
+    out, containers = [], []
+    for box in _join_runs(clusters, 0.15 / mpp):
+        geo = [g for g in furn_geo if inside(g, box)]
+        lo = min(box[2] - box[0], box[3] - box[1]) * mpp
+        hi = max(box[2] - box[0], box[3] - box[1]) * mpp
+        if 0.4 <= lo <= 0.75 and hi >= 0.9:
+            cells = _split_run(box, geo, mpp)
+            if len(cells) > 1:
+                typed = [(c, _classify_box(c, [g for g in geo if inside(g, c)], mpp)) for c in cells]
+                if any(t for _, t in typed):
+                    axis = "h" if box[2] - box[0] >= box[3] - box[1] else "v"
+                    out += [(c, t or "kitchen_base", axis) for c, t in typed]
+                    containers += cells
+                    continue
+        t = _classify_box(box, geo, mpp)
+        out.append((box, t, None))
+        if t:
+            containers.append(box)
+    contained = lambda b, c: b is not c and b[0] >= c[0] - 1 and b[1] >= c[1] - 1 and b[2] <= c[2] + 1 and b[3] <= c[3] + 1
+    return [(b, t, a) for b, t, a in out if not any(contained(b, c) for c in containers if c is not b)]
+
+
+
+def _washers_in_bathrooms(furniture, rooms):
+    """A square box with an X next to a toilet or basin is a washing machine, not a wardrobe."""
+    def room_of(f):
+        for r in rooms:
+            if cv2.pointPolygonTest(np.array(r["polygon"], np.float32), (f["x"], f["y"]), False) >= 0:
+                return r["id"]
+        return None
+    wet = {room_of(f) for f in furniture if f["type"] in ("toilet", "basin", "shower", "bathtub")} - {None}
+    for f in furniture:
+        if f["type"] == "wardrobe" and 0.45 <= min(f["width"], f["depth"]) and max(f["width"], f["depth"]) <= 0.75 \
+                and room_of(f) in wet:
+            f["type"], f["height"] = "washing_machine", APPLIANCE_H["washing_machine"]
 
 def _merge_contained(boxes):
     boxes = sorted(boxes, key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))

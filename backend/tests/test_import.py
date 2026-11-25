@@ -25,6 +25,13 @@ def test_parse_sample_plan():
     assert 70 <= total <= 130
 
 
+def test_sample_plan_appliance_symbols():
+    types = [f["type"] for f in parse_pdf(SAMPLE.read_bytes())["furniture"]]
+    for t in ("stove", "fridge", "oven", "dishwasher", "kitchen_sink", "toilet", "basin"):
+        assert types.count(t) == 1, t
+    assert types.count("kitchen_base") >= 3
+
+
 def test_import_endpoint_and_projects():
     client = TestClient(app)
     with SAMPLE.open("rb") as f:
