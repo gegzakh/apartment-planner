@@ -904,7 +904,13 @@ def _classify_box(box, items, mpp):
             for s in segs:
                 if _flat(*s) and math.dist(*s) * mpp < 0.15:
                     nb = [t for t in segs if t is not s and _steep(*t) and min(_seg_dist(q, *s) for q in t) < 0.4]
-                    if len(nb) >= 2:
+                    # zigzag: the slanted strokes leave the flat one on opposite sides (a pull's bevels don't)
+                    dx, dy = s[1][0] - s[0][0], s[1][1] - s[0][1]
+                    sides = set()
+                    for t in nb:
+                        far = max(t, key=lambda q: _seg_dist(q, *s))
+                        sides.add((far[0] - s[0][0]) * dy - (far[1] - s[0][1]) * dx > 0)
+                    if len(sides) == 2:
                         return "oven"
         # water drop: two steep lines meeting at an apex, closed by a curve
         if curves and len(segs) == 2 and _steep(*segs[0]) and _steep(*segs[1]) and \
