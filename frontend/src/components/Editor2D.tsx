@@ -434,10 +434,26 @@ export default function Editor2D() {
     const inside = (p: Vec2) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1
     const pick = <T extends { id: string }>(list: T[], hit: (t: T) => boolean) => new Set(list.filter(hit).map((t) => t.id))
     // hidden layers are protected
-    const walls = pick(plan.walls, (w) => layers.walls && inside(w.a) && inside(w.b))
+    const wallCorners = (w: Wall): Vec2[] => {
+      const L = dist(w.a, w.b) || 1
+      const nx = (-(w.b[1] - w.a[1]) / L) * (w.thickness / 2)
+      const ny = ((w.b[0] - w.a[0]) / L) * (w.thickness / 2)
+      return [w.a, w.b].flatMap((p): Vec2[] => [[p[0] + nx, p[1] + ny], [p[0] - nx, p[1] - ny]])
+    }
+    const footprint = (f: Furniture): Vec2[] => {
+      const r = (f.rotation * Math.PI) / 180
+      const c = Math.cos(r)
+      const s = Math.sin(r)
+      return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]): Vec2 => {
+        const x = (i * f.width) / 2
+        const y = (j * f.depth) / 2
+        return [f.x + x * c - y * s, f.y + x * s + y * c]
+      })
+    }
+    const walls = pick(plan.walls, (w) => layers.walls && wallCorners(w).every(inside))
     const openings = pick(plan.openings, (o) => walls.has(o.wallId))
     const rooms = pick(plan.rooms, (r) => layers.rooms && r.polygon.every(inside))
-    const furniture = pick(plan.furniture, (f) => layers.furniture && inside([f.x, f.y]))
+    const furniture = pick(plan.furniture, (f) => layers.furniture && footprint(f).every(inside))
     const electrical = pick(plan.electrical, (f) => layers.electrical && inside([f.x, f.y]))
     const plumbing = pick(plan.plumbing, (f) => layers.plumbing && inside([f.x, f.y]))
     const runs = pick(plan.runs, (r) => (r.kind === 'wire' ? layers.wiring : layers.pipes) && r.points.every(inside))
