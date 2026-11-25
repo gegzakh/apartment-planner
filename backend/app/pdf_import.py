@@ -169,7 +169,7 @@ def _scale_from_dimensions(page: pymupdf.Page, segs) -> int | None:
         return None
     scale = float(np.median(ratios)) / PT_MM
     near = min(SCALES, key=lambda s: abs(math.log(scale / s)))
-    return near if abs(math.log(scale / near)) < 0.1 else max(1, round(scale))
+    return near if abs(math.log(scale / near)) < 0.02 else max(1, round(scale))
 
 
 def _is_blue(c):
