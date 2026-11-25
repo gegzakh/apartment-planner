@@ -9,6 +9,7 @@ const TOOLS: { t: Tool; ic: string; label: string; hint: string }[] = [
   { t: 'door', ic: '🚪', label: 'Door', hint: 'Click on a wall to add a door (D)' },
   { t: 'window', ic: '⊞', label: 'Window', hint: 'Click on a wall to add a window' },
   { t: 'opening', ic: '⊓', label: 'Opening', hint: 'Click on a wall to add an open passage' },
+  { t: 'balcony', ic: '⫼', label: 'Open balcony', hint: 'Click on a wall to make an open balcony edge: railing below, no glass above' },
   { t: 'room', ic: '⬠', label: 'Room', hint: 'Click corners, double-click or click first point to close (R)' },
   { t: 'measure', ic: '📏', label: 'Measure', hint: 'Click two points to measure (M)' },
   { t: 'calibrate', ic: '⇔', label: 'Scale', hint: 'Click two points of known distance and enter real length' },

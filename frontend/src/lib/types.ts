@@ -19,7 +19,7 @@ export interface Wall {
   mat?: MaterialSpec
 }
 
-export type OpeningType = 'door' | 'window' | 'opening'
+export type OpeningType = 'door' | 'window' | 'opening' | 'balcony'
 
 export interface Opening {
   id: string
@@ -33,6 +33,8 @@ export interface Opening {
   hinge?: 'start' | 'end'
   /** +1 opens to the wall's left-normal side, -1 to the other */
   swing?: 1 | -1
+  /** Open balcony edge: what stands below the open part (sill = its height). */
+  railing?: 'parapet' | 'glass' | 'metal'
   color?: string
   /** Door leaf / window frame finish. */
   mat?: MaterialSpec
@@ -169,6 +171,7 @@ export type Tool =
   | 'door'
   | 'window'
   | 'opening'
+  | 'balcony'
   | 'room'
   | 'furniture'
   | 'electrical'

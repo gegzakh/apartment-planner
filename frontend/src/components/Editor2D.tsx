@@ -237,6 +237,17 @@ export default function Editor2D() {
       setDraft((dr) => [...dr, sp])
       return
     }
+    if (tool === 'balcony') {
+      const hit = nearestWall(plan, p, 0.5)
+      if (!hit) return notify('Click on a wall to place it')
+      const o: Opening = {
+        id: uid('o'), type: 'balcony', wallId: hit.wall.id, offset: hit.along, width: 2,
+        sill: 1, height: Math.max(0.5, plan.settings.wallHeight - 1), railing: 'glass',
+      }
+      update((d) => void d.openings.push(o))
+      select({ kind: 'opening', id: o.id })
+      return
+    }
     if (tool === 'door' || tool === 'window' || tool === 'opening') {
       const hit = nearestWall(plan, p, 0.5)
       if (!hit) return notify('Click on a wall to place it')
@@ -644,6 +655,13 @@ function OpeningShape({ o, w, selected, px }: { o: Opening; w: Wall; selected: b
       <g>
         <line x1={hx} y1={s * t / 2} x2={tipX} y2={tipY + (s * t) / 2} stroke={stroke} strokeWidth={sw * 2} />
         <path d={`M ${tipX} ${tipY + (s * t) / 2} A ${o.width} ${o.width} 0 0 ${sweep} ${endX} ${(s * t) / 2}`} fill="none" stroke={stroke} strokeWidth={sw} strokeDasharray={`${4 * px} ${3 * px}`} />
+      </g>
+    )
+  } else if (o.type === 'balcony') {
+    symbol = (
+      <g>
+        {o.railing === 'parapet' && <rect x={-hw} y={-t / 4} width={o.width} height={t / 2} fill="#9a9a9a" />}
+        <line x1={-hw} y1={0} x2={hw} y2={0} stroke={stroke} strokeWidth={sw * 2} strokeDasharray={o.railing === 'metal' ? `${2 * px} ${2 * px}` : undefined} />
       </g>
     )
   } else if (o.type === 'window') {
