@@ -1011,7 +1011,12 @@ def _recognise_symbols(clusters, furn_geo, mpp):
                     out += [(c, t or "kitchen_base", axis) for c, t in typed]
                     containers += cells
                     continue
-        for box in parts:  # not a typed counter run: keep the pieces as drawn
+        t = _classify_box(box, geo, mpp) if len(parts) > 1 else None
+        if t:  # one symbol spans the joined pieces (e.g. a sink across two fragments)
+            out.append((box, t, None))
+            containers.append(box)
+            continue
+        for box in parts:  # otherwise keep the pieces as drawn
             t = _classify_box(box, [g for g in furn_geo if inside(g, box)], mpp)
             out.append((box, t, None))
             if t:
