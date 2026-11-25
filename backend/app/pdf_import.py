@@ -777,7 +777,7 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
 # --- appliance / fixture symbols inside furniture outlines ---
 
 APPLIANCE_H = {"stove": 0.9, "oven": 0.9, "dishwasher": 0.85, "fridge": 1.85, "kitchen_sink": 0.9,
-               "kitchen_base": 0.9, "toilet": 0.75, "basin": 0.85, "washing_machine": 0.85, "table_round": 0.75}
+               "kitchen_base": 0.9, "toilet": 0.75, "basin": 0.85, "washing_machine": 0.85, "table_round": 0.75, "table": 0.75}
 FACING = {"stove", "oven", "dishwasher", "fridge", "kitchen_sink", "kitchen_base", "toilet", "basin", "washing_machine"}
 
 
@@ -883,8 +883,8 @@ def _classify_box(box, items, mpp):
         return "stove"
     if bowls and any(b[0] <= d[0] and b[1] <= d[1] and d[2] <= b[2] and d[3] <= b[3] for b in bowls for d in drains):
         return "basin"
-    if bowls and min(size(bowls[0])) >= 0.5 and max(size(bowls[0])) < 1.15 * min(size(bowls[0])) and len(ells) == 1:
-        return "table_round"
+    if bowls and min(size(bowls[0])) >= 0.5 and len(ells) == 1:
+        return "table_round" if max(size(bowls[0])) < 1.15 * min(size(bowls[0])) else "table"
     small = [s for g in groups for s in g if max(size(_bbox(s))) < 0.3]
     for g in _clumps(small):
         segs = [s for s in g if len(s) == 2]
