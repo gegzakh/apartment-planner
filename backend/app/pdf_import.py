@@ -148,7 +148,7 @@ def _scale_from_dimensions(page: pymupdf.Page, segs) -> int | None:
     reds = [s for s in segs if _is_red(s.color) and s.length > 5]
     ratios = []
     for x0, y0, x1, y1, text, *_ in page.get_text("words"):
-        if not text.isdigit() or not 50 <= int(text) <= 30000:
+        if not (text.isascii() and text.isdigit()) or not 50 <= int(text) <= 30000:
             continue
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         horiz = (x1 - x0) >= (y1 - y0)
