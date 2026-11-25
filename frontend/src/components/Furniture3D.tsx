@@ -281,7 +281,9 @@ function Body({ f }: { f: Furniture }) {
         <group>
           <B p={[0, h - 0.015, 0]} s={[w, 0.03, d]} c={c} />
           <B p={[cx, (h - 0.03) / 2, -0.01]} s={[cw, h - 0.03, d - 0.02]} c={c} />
-          <Fronts w={cw} h={h - 0.05} y={(h - 0.03) / 2} z={d / 2 - 0.01} n={3} c={c} drawers />
+          <group position={[cx, 0, 0]}>
+            <Fronts w={cw} h={h - 0.05} y={(h - 0.03) / 2} z={d / 2 - 0.01} n={3} c={c} drawers />
+          </group>
           <B p={[w / 2 - 0.015, (h - 0.03) / 2, 0]} s={[0.03, h - 0.03, d]} c={c} />
           <B p={[(cw - 0.03) / 2, h - 0.1, d / 2 - 0.02]} s={[w - cw - 0.03, 0.12, 0.02]} c={c} />
           <Mirror p={[(cw - 0.03) / 2, h + 0.4, -d / 2 + 0.01]} s={[Math.min(0.6, w - cw - 0.1), 0.6, 0.015]} />
