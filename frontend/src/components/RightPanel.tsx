@@ -66,7 +66,11 @@ function Quantities() {
       floorTotal += a
       paint += polygonPerimeter(r.polygon) * H
     }
-    const openingArea = plan.openings.reduce((s, o) => s + o.width * (o.height + (o.type === 'balcony' && o.railing !== 'parapet' ? o.sill : 0)), 0)
+    const openingArea = plan.openings.reduce((s, o) => {
+      const top = Math.min(o.sill + o.height, plan.walls.find((w) => w.id === o.wallId)?.height ?? H)
+      const bottom = o.type === 'balcony' && o.railing !== 'parapet' ? 0 : o.sill
+      return s + o.width * Math.max(0, top - bottom)
+    }, 0)
     paint = Math.max(0, paint - openingArea * 2)
     const wallLen = plan.walls.reduce((s, w) => s + wallFrame(w).L, 0)
     const count = (arr: { type: string }[]) => arr.reduce<Record<string, number>>((m, f) => ((m[f.type] = (m[f.type] ?? 0) + 1), m), {})
