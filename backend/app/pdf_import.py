@@ -139,6 +139,39 @@ def _is_black(c):
     return max(c) < 0.15
 
 
+def _is_red(c):
+    return c[0] > 0.7 and c[1] < 0.3 and c[2] < 0.3
+
+
+def _scale_from_dimensions(page: pymupdf.Page, segs) -> int | None:
+    """Drawing scale from dimension texts (mm) next to red dimension lines."""
+    reds = [s for s in segs if _is_red(s.color) and s.length > 5]
+    ratios = []
+    for x0, y0, x1, y1, text, *_ in page.get_text("words"):
+        if not text.isdigit() or not 50 <= int(text) <= 30000:
+            continue
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        horiz = (x1 - x0) >= (y1 - y0)
+        reach = 2.5 * min(x1 - x0, y1 - y0) + 2
+        best, bd = None, reach
+        for s in reds:
+            dx, dy = s.b[0] - s.a[0], s.b[1] - s.a[1]
+            if horiz != (abs(dx) >= abs(dy)) or min(abs(dx), abs(dy)) > 0.05 * s.length:
+                continue
+            along, perp = (cx, cy) if horiz else (cy, cx)
+            lo, hi = sorted((s.a[0], s.b[0]) if horiz else (s.a[1], s.b[1]))
+            line = (s.a[1] + s.b[1]) / 2 if horiz else (s.a[0] + s.b[0]) / 2
+            if lo <= along <= hi and abs(perp - line) < bd:
+                best, bd = s, abs(perp - line)
+        if best:
+            ratios.append(int(text) / best.length)
+    if len(ratios) < 3:
+        return None
+    scale = float(np.median(ratios)) / PT_MM
+    near = min(SCALES, key=lambda s: abs(math.log(scale / s)))
+    return near if abs(math.log(scale / near)) < 0.1 else max(1, round(scale))
+
+
 def _is_blue(c):
     return c[2] > 0.5 and c[0] < 0.5
 
@@ -304,7 +337,7 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
     if radii:
         big = max(radii)
         door_arcs = [a for a in door_arcs if a.radius > big * 0.55]
-    scale = scale or _choose_scale([a.radius for a in door_arcs])
+    scale = scale or _scale_from_dimensions(page, ex.segs) or _choose_scale([a.radius for a in door_arcs])
     m_per_pt = PT_MM * scale / 1000.0
 
     # --- classify segments ---
@@ -313,6 +346,8 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
     for s in ex.segs:
         if _is_blue(s.color):
             s.kind = "blue_window" if s.color[0] > 0.2 else "overhead"
+        elif _is_red(s.color):
+            s.kind = "dim"  # dimension lines are annotations, not furniture
         elif _is_black(s.color) and s.width >= bold_w * 0.9 and bold_w > 0.5:
             s.kind = "bold"
         else:
@@ -512,7 +547,8 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
 
     # --- wall rectangles ---
     walls_c = cv2.morphologyEx(walls, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
-    rects_px = _mask_to_rects(walls_c, tol_px=0.03 / m_per_pt * R.res,
+    rects_px = _mask_to_rects(walls_c, tol_px=min(0.03 / m_per_pt, 1.2) * R.res,  # stay below thin window walls
+
                               min_area_px=(0.08 / m_per_pt * R.res) ** 2)
 
     if DEBUG:
@@ -552,15 +588,42 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
             furn_geo.append(a.pts)
     for g in furn_geo:
         R.poly(furn_img, g, 3)
-    furn_img = cv2.bitwise_and(furn_img, cv2.bitwise_not(cv2.dilate(walls, np.ones((3, 3), np.uint8))))
+    wall_d = cv2.dilate(walls, np.ones((3, 3), np.uint8))
+    furn_img = cv2.bitwise_and(furn_img, cv2.bitwise_not(wall_d))
     n, lab, stats, _ = cv2.connectedComponentsWithStats(furn_img, connectivity=8)
     clusters = []
+    parts = []  # pieces of L/U-shaped runs (kitchen counters); they never swallow the items they wrap around
+    min_side = 0.3 / m_per_pt * R.res
     for i in range(1, n):
         x, y, bw, bh, area = stats[i]
         if max(bw, bh) < 0.15 / m_per_pt * R.res:
             continue
-        clusters.append([x / R.res, y / R.res, (x + bw) / R.res, (y + bh) / R.res])
-    clusters = _merge_contained(clusters)
+        box = [x / R.res, y / R.res, (x + bw) / R.res, (y + bh) / R.res]
+        if bw * bh * (m_per_pt / R.res) ** 2 > 1.0:
+            # lines plus every small area they enclose together with the walls (counter cells, table tops)
+            mg = int(0.3 / m_per_pt * R.res)
+            X0, Y0 = max(0, x - mg), max(0, y - mg)
+            X1, Y1 = min(lab.shape[1], x + bw + mg), min(lab.shape[0], y + bh + mg)
+            comp_m = (lab[Y0:Y1, X0:X1] == i).astype(np.uint8) * 255
+            barrier = cv2.bitwise_or(comp_m, wall_d[Y0:Y1, X0:X1])
+            hn, hlab, hst, _ = cv2.connectedComponentsWithStats(cv2.bitwise_not(barrier), connectivity=4)
+            filled_m = comp_m.copy()
+            max_hole = 2.5 / (m_per_pt / R.res) ** 2
+            for j in range(1, hn):
+                hx, hy, hw_, hh, harea = hst[j]
+                if hx > 0 and hy > 0 and hx + hw_ < X1 - X0 and hy + hh < Y1 - Y0 and harea < max_hole:
+                    filled_m[hlab == j] = 255
+            filled = filled_m[y - Y0:y - Y0 + bh, x - X0:x - X0 + bw]
+            if DEBUG:
+                print('furn', [round(v) for v in box], round(filled.mean() / 255, 2))
+            if filled.mean() < 0.6 * 255:
+                pieces = [r for r in _mask_to_rects(filled, tol_px=min(0.03 / m_per_pt, 1.2) * R.res, min_area_px=min_side ** 2)
+                          if min(r[2] - r[0], r[3] - r[1]) >= min_side * 0.8]
+                if pieces:
+                    parts += [[(x + r[0]) / R.res, (y + r[1]) / R.res, (x + r[2]) / R.res, (y + r[3]) / R.res] for r in pieces]
+                    continue
+        clusters.append(box)
+    clusters = _merge_contained(clusters) + parts
 
     # --- convert to metres ---
     all_pts = [p for r in rects_px for p in ((r[0], r[1]), (r[2], r[3]))]
@@ -650,11 +713,18 @@ def parse_pdf(data: bytes, page_index: int = 0, scale: int | None = None) -> dic
         cx, cy = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
         # outline path in local metres (centred)
         paths = []
+        crosses = 0
+        side = min(x1 - x0, y1 - y0)
         for g in furn_geo:
             if all(x0 - 0.5 <= p[0] <= x1 + 0.5 and y0 - 0.5 <= p[1] <= y1 + 0.5 for p in g):
                 pts = [M(*p) for p in g]
                 paths.append("M" + " L".join(f"{p[0] - cx:.3f} {p[1] - cy:.3f}" for p in pts))
+                if len(g) == 2:
+                    dx, dy, ln = abs(g[1][0] - g[0][0]), abs(g[1][1] - g[0][1]), math.dist(g[0], g[1])
+                    crosses += min(dx, dy) > 0.3 * ln and ln > 0.9 * side
         ftype, height = _guess_furniture(wdt, dep)
+        if crosses >= 2 and min(wdt, dep) >= 0.3:
+            ftype, height = "wardrobe", 2.2  # a box with an X is a tall cabinet in plan drawings
         furniture.append({
             "id": _id("f"), "type": ftype, "x": round(cx, 3), "y": round(cy, 3), "rotation": 0,
             "width": round(wdt, 3), "depth": round(dep, 3), "height": height,
