@@ -1,0 +1,12 @@
+services:
+  planner:
+    build: .
+    image: apartment-planner:latest
+    ports:
+      - "127.0.0.1:8080:8000"  # use "8080:8000" to reach it from other devices on your network
+    volumes:
+      - planner-data:/data
+    restart: unless-stopped
+
+volumes:
+  planner-data:
