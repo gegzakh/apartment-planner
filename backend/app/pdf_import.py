@@ -849,8 +849,8 @@ def _seg_dist(p, a, b):
 
 
 def _steep(a, b):
-    ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 180
-    return 45 < ang < 82 or 98 < ang < 135
+    """Slanted stroke (not axis-aligned), so icons match in any quarter-turn."""
+    return not _flat(a, b)
 
 
 def _flat(a, b):
