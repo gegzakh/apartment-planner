@@ -482,7 +482,7 @@ export default function Editor2D() {
       d.plumbing = d.plumbing.filter((x) => !plumbing.has(x.id))
       d.runs = d.runs.filter((x) => !runs.has(x.id))
       d.viewpoints = d.viewpoints.filter((x) => !viewpoints.has(x.id))
-      healRoomsAfterWallRemoval(d, removedWalls)
+      if (layers.rooms) healRoomsAfterWallRemoval(d, removedWalls)
     })
     select(null)
     notify(`Deleted ${n} object${n === 1 ? '' : 's'} — Ctrl+Z to undo`)
