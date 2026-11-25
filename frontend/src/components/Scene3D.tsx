@@ -53,8 +53,12 @@ function WallMesh({ w, plan, openings, selected, cut }: { w: Wall; plan: Plan; o
     return [end, end, TOP_MAT, end, getMaterial(sL.spec, sL.color, { faceSize: [len, hh] }), getMaterial(sR.spec, sR.color, { faceSize: [len, hh] })]
   }
 
+  const placed = useMemo(
+    () => openings.map((o) => ({ ...o, offset: Math.max(o.width / 2, Math.min(L - o.width / 2, o.offset)) })),
+    [openings, L],
+  )
   const pieces = useMemo(() => {
-    const ops = openings
+    const ops = placed
       .map((o) => ({ o, s: Math.max(0, o.offset - o.width / 2), e: Math.min(L, o.offset + o.width / 2) }))
       .sort((a, b) => a.s - b.s)
     const out: { x0: number; x1: number; y0: number; y1: number }[] = []
@@ -69,7 +73,7 @@ function WallMesh({ w, plan, openings, selected, cut }: { w: Wall; plan: Plan; o
     }
     if (cur < L) out.push({ x0: cur, x1: L, y0: 0, y1: H })
     return out.filter((p) => p.x1 - p.x0 > 0.001 && p.y1 - p.y0 > 0.001)
-  }, [openings, L, H])
+  }, [placed, L, H])
 
   // extend wall ends by half thickness to close corners
   const ext = t / 2
@@ -84,7 +88,7 @@ function WallMesh({ w, plan, openings, selected, cut }: { w: Wall; plan: Plan; o
           </mesh>
         )
       })}
-      {openings.map((o) => (
+      {placed.map((o) => (
         <OpeningMesh key={o.id} o={o} t={t} H={H} />
       ))}
     </group>
