@@ -147,9 +147,12 @@ def _scale_from_dimensions(page: pymupdf.Page, segs) -> int | None:
     """Drawing scale from dimension texts (mm) next to red dimension lines."""
     reds = [s for s in segs if _is_red(s.color) and s.length > 5]
     ratios = []
-    for x0, y0, x1, y1, text, *_ in page.get_text("words"):
+    rot = page.rotation_matrix  # segments from extract() are in rotated page space
+    for wx0, wy0, wx1, wy1, text, *_ in page.get_text("words"):
         if not (text.isascii() and text.isdigit()) or not 50 <= int(text) <= 30000:
             continue
+        r = pymupdf.Rect(wx0, wy0, wx1, wy1) * rot
+        x0, y0, x1, y1 = r.x0, r.y0, r.x1, r.y1
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         horiz = (x1 - x0) >= (y1 - y0)
         reach = 2.5 * min(x1 - x0, y1 - y0) + 2
