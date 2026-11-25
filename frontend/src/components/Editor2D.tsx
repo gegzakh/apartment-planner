@@ -451,7 +451,14 @@ export default function Editor2D() {
       })
     }
     const walls = pick(plan.walls, (w) => layers.walls && wallCorners(w).every(inside))
-    const openings = pick(plan.openings, (o) => walls.has(o.wallId))
+    const openingEnds = (o: Opening): Vec2[] => {
+      const w = wallsById[o.wallId]
+      if (!w) return []
+      const L = dist(w.a, w.b) || 1
+      const u: Vec2 = [(w.b[0] - w.a[0]) / L, (w.b[1] - w.a[1]) / L]
+      return [o.offset - o.width / 2, o.offset + o.width / 2].map((t): Vec2 => [w.a[0] + u[0] * t, w.a[1] + u[1] * t])
+    }
+    const openings = pick(plan.openings, (o) => walls.has(o.wallId) || (layers.openings && !!wallsById[o.wallId] && openingEnds(o).every(inside)))
     const rooms = pick(plan.rooms, (r) => layers.rooms && r.polygon.every(inside))
     const furniture = pick(plan.furniture, (f) => layers.furniture && footprint(f).every(inside))
     const electrical = pick(plan.electrical, (f) => layers.electrical && inside([f.x, f.y]))
