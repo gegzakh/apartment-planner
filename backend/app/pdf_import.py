@@ -968,17 +968,18 @@ def _wall_side(box, wall_mask, res, axis=None):
 
 def _join_runs(boxes, gap):
     """Re-join pieces of one counter run that the raster split (same depth, touching ends)."""
-    boxes = [list(b) for b in boxes]
+    boxes = [(list(b), [b]) for b in boxes]
     merged = True
     while merged:
         merged = False
         for i, a in enumerate(boxes):
+            a, pa = a
             for j in range(i + 1, len(boxes)):
-                b = boxes[j]
+                b, pb = boxes[j]
                 same_row = abs(a[1] - b[1]) < 1 and abs(a[3] - b[3]) < 1 and -1 < max(a[0], b[0]) - min(a[2], b[2]) < gap
                 same_col = abs(a[0] - b[0]) < 1 and abs(a[2] - b[2]) < 1 and -1 < max(a[1], b[1]) - min(a[3], b[3]) < gap
                 if same_row or same_col:
-                    boxes[i] = [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
+                    boxes[i] = ([min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])], pa + pb)
                     del boxes[j]
                     merged = True
                     break
@@ -991,7 +992,7 @@ def _recognise_symbols(clusters, furn_geo, mpp):
     """Returns [(box, type|None)] with counter runs split into typed units and symbol icons absorbed."""
     inside = lambda g, b: all(b[0] - 1.5 <= p[0] <= b[2] + 1.5 and b[1] - 1.5 <= p[1] <= b[3] + 1.5 for p in g)
     out, containers = [], []
-    for box in _join_runs(clusters, 0.15 / mpp):
+    for box, parts in _join_runs(clusters, 0.15 / mpp):
         geo = [g for g in furn_geo if inside(g, box)]
         lo = min(box[2] - box[0], box[3] - box[1]) * mpp
         hi = max(box[2] - box[0], box[3] - box[1]) * mpp
@@ -1004,10 +1005,11 @@ def _recognise_symbols(clusters, furn_geo, mpp):
                     out += [(c, t or "kitchen_base", axis) for c, t in typed]
                     containers += cells
                     continue
-        t = _classify_box(box, geo, mpp)
-        out.append((box, t, None))
-        if t:
-            containers.append(box)
+        for box in parts:  # not a typed counter run: keep the pieces as drawn
+            t = _classify_box(box, [g for g in furn_geo if inside(g, box)], mpp)
+            out.append((box, t, None))
+            if t:
+                containers.append(box)
     contained = lambda b, c: b is not c and b[0] >= c[0] - 1 and b[1] >= c[1] - 1 and b[2] <= c[2] + 1 and b[3] <= c[3] + 1
     return [(b, t, a) for b, t, a in out if not any(contained(b, c) for c in containers if c is not b)]
 
