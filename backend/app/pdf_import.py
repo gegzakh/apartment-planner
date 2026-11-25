@@ -172,7 +172,11 @@ def _scale_from_dimensions(page: pymupdf.Page, segs) -> int | None:
         return None
     # most labels sit on their own line; take the densest ratio, not the mean of noisy matches
     lr = np.log(np.array(ratios) / PT_MM)
-    scale = float(np.exp(max(lr, key=lambda v: (np.abs(lr - v) < 0.02).sum())))
+    votes = [(np.abs(lr - v) < 0.02).sum() for v in lr]
+    i = int(np.argmax(votes))
+    if votes[i] < 2:  # no two labels agree: matches are unreliable
+        return None
+    scale = float(np.exp(lr[i]))
     near = min(SCALES, key=lambda s: abs(math.log(scale / s)))
     return near if abs(math.log(scale / near)) < 0.02 else max(1, round(scale))
 
