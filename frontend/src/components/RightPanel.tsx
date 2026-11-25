@@ -67,7 +67,7 @@ function Quantities() {
       paint += polygonPerimeter(r.polygon) * H
     }
     const openingArea = plan.openings.reduce((s, o) => {
-      const top = Math.min(o.sill + o.height, plan.walls.find((w) => w.id === o.wallId)?.height ?? H)
+      const top = Math.min(o.sill + o.height, H)
       const bottom = o.type === 'balcony' && o.railing !== 'parapet' ? 0 : o.sill
       return s + o.width * Math.max(0, top - bottom)
     }, 0)
