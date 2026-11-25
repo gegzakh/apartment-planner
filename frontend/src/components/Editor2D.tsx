@@ -4,6 +4,7 @@ import {
   add, dist, labelPoint, mul, nearestWall, openingFrame, planBounds, polygonArea, projectOnSegment, snap, sub, uid, wallCorners, wallFrame,
 } from '../lib/geometry'
 import { FINISH_BY_KEY } from '../lib/materials'
+import { healRoomsAfterWallRemoval } from '../lib/rooms'
 import { useStore } from '../lib/store'
 import type { Fixture, Furniture, Opening, Plan, PipeKind, Vec2, Wall } from '../lib/types'
 
@@ -472,6 +473,7 @@ export default function Editor2D() {
       return
     }
     update((d) => {
+      const removedWalls = d.walls.filter((x) => walls.has(x.id))
       d.walls = d.walls.filter((x) => !walls.has(x.id))
       d.openings = d.openings.filter((x) => !openings.has(x.id))
       d.rooms = d.rooms.filter((x) => !rooms.has(x.id))
@@ -480,6 +482,7 @@ export default function Editor2D() {
       d.plumbing = d.plumbing.filter((x) => !plumbing.has(x.id))
       d.runs = d.runs.filter((x) => !runs.has(x.id))
       d.viewpoints = d.viewpoints.filter((x) => !viewpoints.has(x.id))
+      healRoomsAfterWallRemoval(d, removedWalls)
     })
     select(null)
     notify(`Deleted ${n} object${n === 1 ? '' : 's'} — Ctrl+Z to undo`)
@@ -693,6 +696,10 @@ function FurnitureShape({ f, selected, px }: { f: Furniture; selected: boolean; 
       case 'fridge': {
         const r = Math.min(w, d) / 4
         return <path d={`M${-r} 0 L${r} 0 M0 ${-r} L0 ${r} M${-r * 0.7} ${-r * 0.7} L${r * 0.7} ${r * 0.7} M${r * 0.7} ${-r * 0.7} L${-r * 0.7} ${r * 0.7}`} stroke={stroke} strokeWidth={sw} />
+      }
+      case 'oven_tower': {
+        const r = Math.min(w, d) / 4
+        return <path d={`M${-w / 2 + 0.05} ${-d / 2 + 0.05} L${w / 2 - 0.05} ${-d / 2 + 0.05} L${w / 2 - 0.05} ${d / 2 - 0.05} L${-w / 2 + 0.05} ${d / 2 - 0.05} Z M${r * 0.3} ${-r} L${-r * 0.4} ${r * 0.1} L${r * 0.4} ${-r * 0.1} L${-r * 0.3} ${r}`} fill="none" stroke={stroke} strokeWidth={sw} />
       }
       case 'oven': {
         const r = Math.min(w, d) / 4

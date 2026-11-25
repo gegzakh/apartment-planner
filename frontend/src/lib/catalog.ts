@@ -35,6 +35,7 @@ export const FURNITURE: FurnitureDef[] = [
   { type: 'stove', label: 'Cooktop/oven', w: 0.6, d: 0.6, h: 0.9, color: '#2b2b2b', category: 'Kitchen' },
   { type: 'fridge', label: 'Fridge', w: 0.6, d: 0.65, h: 1.85, color: '#d8dde2', category: 'Kitchen' },
   { type: 'oven', label: 'Built-in oven', w: 0.6, d: 0.6, h: 0.9, color: '#f0ece4', category: 'Kitchen' },
+  { type: 'oven_tower', label: 'Tall oven housing (appliance tower)', w: 0.6, d: 0.6, h: 2.2, color: '#f0ece4', category: 'Kitchen' },
   { type: 'dishwasher', label: 'Dishwasher', w: 0.6, d: 0.6, h: 0.85, color: '#d8dde2', category: 'Kitchen' },
   { type: 'island', label: 'Kitchen island', w: 1.6, d: 0.9, h: 0.92, color: '#f0ece4', category: 'Kitchen' },
   { type: 'toilet', label: 'Toilet', w: 0.38, d: 0.65, h: 0.75, color: '#ffffff', category: 'Bathroom' },

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { healRoomsAfterWallRemoval } from './rooms'
 import type { EntityKind, LayerKey, Plan, Selection, Tool, ViewMode } from './types'
 
 export const emptyPlan = (): Plan => ({
@@ -151,8 +152,10 @@ export const useStore = create<State>((set, get) => ({
     if (!sel) return
     get().update((d) => {
       const key = COLLECTION[sel.kind]
+      const wall = sel.kind === 'wall' ? d.walls.find((w) => w.id === sel.id) : undefined
       ;(d[key] as { id: string }[]) = (d[key] as { id: string }[]).filter((e) => e.id !== sel.id)
       if (sel.kind === 'wall') d.openings = d.openings.filter((o) => o.wallId !== sel.id)
+      if (wall) healRoomsAfterWallRemoval(d, [wall])
     })
     set({ selection: null })
   },
