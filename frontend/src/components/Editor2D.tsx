@@ -81,6 +81,7 @@ export default function Editor2D() {
       if (e.key === 'Escape') {
         finishDraft()
         setDraft([])
+        setBox(null)
         useStore.getState().setTool('select')
       }
       if (e.key === 'Enter') finishDraft()
