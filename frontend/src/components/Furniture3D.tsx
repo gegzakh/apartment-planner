@@ -251,18 +251,20 @@ function Body({ f }: { f: Furniture }) {
           {f.type === 'kitchen_sink' && <B p={[0, h, 0.02]} s={[w * 0.6, 0.01, d * 0.6]} c="#9aa0a6" m={0.8} r={0.2} />}
         </group>
       )
-    case 'oven_tower':
-      // tall housing: drawers below, built-in oven, microwave above it, top cupboard
+    case 'oven_tower': {
+      // tall housing: drawers below, built-in oven, microwave above it, top cupboard (laid out for 2.2 m, scaled to h)
+      const k = h / 2.2
       return (
         <group>
           <B p={[0, h / 2, -0.01]} s={[w, h, d - 0.02]} c={c} />
-          <Fronts w={w} h={0.7} y={0.05 + 0.35} z={d / 2 - 0.01} n={2} c={c} drawers />
-          <B p={[0, 1.08, d / 2 - 0.005]} s={[w - 0.04, 0.58, 0.02]} c="#1b1b1b" r={0.1} m={0.3} />
-          <B p={[0, 1.31, d / 2 + 0.015]} s={[w * 0.7, 0.015, 0.02]} c={CHROME} m={0.8} r={0.3} />
-          <B p={[0, 1.58, d / 2 - 0.005]} s={[w - 0.04, 0.38, 0.02]} c="#222" r={0.1} m={0.3} />
-          <Fronts w={w} h={h - 1.8} y={1.8 + (h - 1.8) / 2} z={d / 2 - 0.01} n={1} c={c} />
+          <Fronts w={w} h={0.7 * k} y={0.05 + 0.35 * k} z={d / 2 - 0.01} n={2} c={c} drawers />
+          <B p={[0, 1.08 * k, d / 2 - 0.005]} s={[w - 0.04, 0.58 * k, 0.02]} c="#1b1b1b" r={0.1} m={0.3} />
+          <B p={[0, 1.31 * k, d / 2 + 0.015]} s={[w * 0.7, 0.015, 0.02]} c={CHROME} m={0.8} r={0.3} />
+          <B p={[0, 1.58 * k, d / 2 - 0.005]} s={[w - 0.04, 0.38 * k, 0.02]} c="#222" r={0.1} m={0.3} />
+          <Fronts w={w} h={h - 1.8 * k} y={1.8 * k + (h - 1.8 * k) / 2} z={d / 2 - 0.01} n={1} c={c} />
         </group>
       )
+    }
     case 'kitchen_wall':
       return (
         <group>
