@@ -126,11 +126,13 @@ function OpeningMesh({ o, t, H }: { o: Opening; t: number; H: number }) {
   if (o.type === 'balcony') {
     const rh = Math.min(o.sill, H)
     const metal = selected ? SEL : o.mat?.color ?? o.color ?? '#3a3a3a'
+    const finish = o.mat && !selected ? getMaterial(o.mat, metal) : undefined
+    const metalMat = finish ? <primitive object={finish} attach="material" /> : <meshStandardMaterial color={metal} metalness={0.7} roughness={0.35} />
     if (o.railing === 'parapet' || rh <= 0) {
       return (
         <mesh position={[o.offset, rh + 0.01, 0]} onClick={onSel('opening', o.id)}>
           <boxGeometry args={[o.width, 0.02, t + 0.02]} />
-          <meshStandardMaterial color="#d9d6d0" roughness={0.6} />
+          {finish ? <primitive object={finish} attach="material" /> : <meshStandardMaterial color={selected ? SEL : o.color ?? '#d9d6d0'} roughness={0.6} />}
         </mesh>
       )
     }
@@ -139,24 +141,24 @@ function OpeningMesh({ o, t, H }: { o: Opening; t: number; H: number }) {
       <group position={[o.offset, 0, 0]} onClick={onSel('opening', o.id)}>
         <mesh position={[0, rh - 0.02, 0]} castShadow>
           <boxGeometry args={[o.width, 0.04, 0.06]} />
-          <meshStandardMaterial color={metal} metalness={0.7} roughness={0.35} />
+          {metalMat}
         </mesh>
         {[-hw + 0.02, hw - 0.02].map((x) => (
           <mesh key={x} position={[x, rh / 2, 0]} castShadow>
             <boxGeometry args={[0.04, rh, 0.04]} />
-            <meshStandardMaterial color={metal} metalness={0.7} roughness={0.35} />
+            {metalMat}
           </mesh>
         ))}
         {o.railing === 'metal' ? (
           <>
             <mesh position={[0, 0.1, 0]}>
               <boxGeometry args={[o.width, 0.03, 0.03]} />
-              <meshStandardMaterial color={metal} metalness={0.7} roughness={0.35} />
+              {metalMat}
             </mesh>
             {Array.from({ length: bars - 1 }, (_, i) => (
               <mesh key={i} position={[-hw + ((i + 1) * o.width) / bars, rh / 2, 0]}>
                 <boxGeometry args={[0.015, rh - 0.04, 0.015]} />
-                <meshStandardMaterial color={metal} metalness={0.7} roughness={0.35} />
+                {metalMat}
               </mesh>
             ))}
           </>
