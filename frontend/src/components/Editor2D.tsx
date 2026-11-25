@@ -433,14 +433,15 @@ export default function Editor2D() {
     if (x1 - x0 < 0.05 || y1 - y0 < 0.05) return
     const inside = (p: Vec2) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1
     const pick = <T extends { id: string }>(list: T[], hit: (t: T) => boolean) => new Set(list.filter(hit).map((t) => t.id))
-    const walls = pick(plan.walls, (w) => inside(w.a) && inside(w.b))
+    // hidden layers are protected
+    const walls = pick(plan.walls, (w) => layers.walls && inside(w.a) && inside(w.b))
     const openings = pick(plan.openings, (o) => walls.has(o.wallId))
-    const rooms = pick(plan.rooms, (r) => r.polygon.every(inside))
-    const furniture = pick(plan.furniture, (f) => inside([f.x, f.y]))
-    const electrical = pick(plan.electrical, (f) => inside([f.x, f.y]))
-    const plumbing = pick(plan.plumbing, (f) => inside([f.x, f.y]))
-    const runs = pick(plan.runs, (r) => r.points.every(inside))
-    const viewpoints = pick(plan.viewpoints, (v) => inside([v.x, v.y]))
+    const rooms = pick(plan.rooms, (r) => layers.rooms && r.polygon.every(inside))
+    const furniture = pick(plan.furniture, (f) => layers.furniture && inside([f.x, f.y]))
+    const electrical = pick(plan.electrical, (f) => layers.electrical && inside([f.x, f.y]))
+    const plumbing = pick(plan.plumbing, (f) => layers.plumbing && inside([f.x, f.y]))
+    const runs = pick(plan.runs, (r) => (r.kind === 'wire' ? layers.wiring : layers.pipes) && r.points.every(inside))
+    const viewpoints = pick(plan.viewpoints, (v) => layers.viewpoints && inside([v.x, v.y]))
     const n = [walls, openings, rooms, furniture, electrical, plumbing, runs, viewpoints].reduce((s, x) => s + x.size, 0)
     if (!n) {
       notify('Nothing was fully inside the box')
