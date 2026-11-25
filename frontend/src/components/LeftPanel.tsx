@@ -13,6 +13,7 @@ const TOOLS: { t: Tool; ic: string; label: string; hint: string }[] = [
   { t: 'measure', ic: '📏', label: 'Measure', hint: 'Click two points to measure (M)' },
   { t: 'calibrate', ic: '⇔', label: 'Scale', hint: 'Click two points of known distance and enter real length' },
   { t: 'viewpoint', ic: '◉', label: '360° point', hint: 'Click to place a 360° viewpoint' },
+  { t: 'erase', ic: '⌫', label: 'Delete area', hint: 'Drag a box: everything fully inside it is deleted (Ctrl+Z undoes)' },
 ]
 
 export default function LeftPanel({ open = false }: { open?: boolean }) {

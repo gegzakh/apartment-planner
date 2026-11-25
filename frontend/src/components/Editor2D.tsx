@@ -40,6 +40,7 @@ export default function Editor2D() {
   const [drag, setDrag] = useState<Drag | null>(null)
   const [cursor, setCursor] = useState<Vec2 | null>(null)
   const [draft, setDraft] = useState<Vec2[]>([])
+  const [box, setBox] = useState<[Vec2, Vec2] | null>(null)
   const [space, setSpace] = useState(false)
   const fitted = useRef(false)
 
@@ -177,6 +178,10 @@ export default function Editor2D() {
     const p = toWorld(e)
     if (e.button === 1 || e.button === 2 || space || tool === 'pan') {
       setDrag({ type: 'pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y })
+      return
+    }
+    if (tool === 'erase') {
+      setBox([p, p])
       return
     }
     const target = (e.target as Element).closest('[data-kind]') as HTMLElement | null
@@ -322,6 +327,7 @@ export default function Editor2D() {
   const onPointerMove = (e: React.PointerEvent) => {
     const p = toWorld(e)
     setCursor(p)
+    if (box) setBox([box[0], p])
     if (!drag) return
     if (drag.type === 'pan') {
       setView((v) => ({ ...v, x: drag.vx - (e.clientX - drag.sx) / v.k, y: drag.vy - (e.clientY - drag.sy) / v.k }))
@@ -413,7 +419,36 @@ export default function Editor2D() {
     }
   }
 
-  const onPointerUp = () => setDrag(null)
+  const onPointerUp = () => {
+    setDrag(null)
+    if (box) {
+      eraseBox(box[0], box[1])
+      setBox(null)
+    }
+  }
+
+  function eraseBox(a: Vec2, b: Vec2) {
+    const [x0, x1] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])]
+    const [y0, y1] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])]
+    if (x1 - x0 < 0.05 || y1 - y0 < 0.05) return
+    const inside = (p: Vec2) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1
+    let n = 0
+    update((d) => {
+      const keep = <T,>(list: T[], gone: (t: T) => boolean) => list.filter((t) => (gone(t) ? (n++, false) : true))
+      const before = new Set(d.walls.map((w) => w.id))
+      d.walls = keep(d.walls, (w) => inside(w.a) && inside(w.b))
+      const left = new Set(d.walls.map((w) => w.id))
+      d.openings = keep(d.openings, (o) => before.has(o.wallId) && !left.has(o.wallId))
+      d.rooms = keep(d.rooms, (r) => r.polygon.every(inside))
+      d.furniture = keep(d.furniture, (f) => inside([f.x, f.y]))
+      d.electrical = keep(d.electrical, (f) => inside([f.x, f.y]))
+      d.plumbing = keep(d.plumbing, (f) => inside([f.x, f.y]))
+      d.runs = keep(d.runs, (r) => r.points.every(inside))
+      d.viewpoints = keep(d.viewpoints, (v) => inside([v.x, v.y]))
+    })
+    select(null)
+    notify(n ? `Deleted ${n} object${n === 1 ? '' : 's'} — Ctrl+Z to undo` : 'Nothing was fully inside the box')
+  }
 
   // ---- derived ----
   const wallsById = useMemo(() => Object.fromEntries(plan.walls.map((w) => [w.id, w])), [plan.walls])
@@ -522,6 +557,13 @@ export default function Editor2D() {
               </text>
             )}
           </g>
+        )}
+        {box && (
+          <rect
+            x={Math.min(box[0][0], box[1][0])} y={Math.min(box[0][1], box[1][1])}
+            width={Math.abs(box[1][0] - box[0][0])} height={Math.abs(box[1][1] - box[0][1])}
+            fill="rgba(235, 87, 87, 0.12)" stroke="#eb5757" strokeWidth={1.5 * px} strokeDasharray={`${6 * px} ${4 * px}`}
+          />
         )}
         {(tool === 'measure' || tool === 'calibrate') && draft.length > 0 && cursor && (
           <MeasureLine a={draft[0]} b={draft[1] ?? snapPt(cursor, draft[0])} px={px} />

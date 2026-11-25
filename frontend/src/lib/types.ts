@@ -177,5 +177,6 @@ export type Tool =
   | 'measure'
   | 'calibrate'
   | 'viewpoint'
+  | 'erase'
 
 export type ViewMode = '2d' | '3d' | 'split'
