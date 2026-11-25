@@ -432,22 +432,32 @@ export default function Editor2D() {
     const [y0, y1] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])]
     if (x1 - x0 < 0.05 || y1 - y0 < 0.05) return
     const inside = (p: Vec2) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1
-    let n = 0
+    const pick = <T extends { id: string }>(list: T[], hit: (t: T) => boolean) => new Set(list.filter(hit).map((t) => t.id))
+    const walls = pick(plan.walls, (w) => inside(w.a) && inside(w.b))
+    const openings = pick(plan.openings, (o) => walls.has(o.wallId))
+    const rooms = pick(plan.rooms, (r) => r.polygon.every(inside))
+    const furniture = pick(plan.furniture, (f) => inside([f.x, f.y]))
+    const electrical = pick(plan.electrical, (f) => inside([f.x, f.y]))
+    const plumbing = pick(plan.plumbing, (f) => inside([f.x, f.y]))
+    const runs = pick(plan.runs, (r) => r.points.every(inside))
+    const viewpoints = pick(plan.viewpoints, (v) => inside([v.x, v.y]))
+    const n = [walls, openings, rooms, furniture, electrical, plumbing, runs, viewpoints].reduce((s, x) => s + x.size, 0)
+    if (!n) {
+      notify('Nothing was fully inside the box')
+      return
+    }
     update((d) => {
-      const keep = <T,>(list: T[], gone: (t: T) => boolean) => list.filter((t) => (gone(t) ? (n++, false) : true))
-      const before = new Set(d.walls.map((w) => w.id))
-      d.walls = keep(d.walls, (w) => inside(w.a) && inside(w.b))
-      const left = new Set(d.walls.map((w) => w.id))
-      d.openings = keep(d.openings, (o) => before.has(o.wallId) && !left.has(o.wallId))
-      d.rooms = keep(d.rooms, (r) => r.polygon.every(inside))
-      d.furniture = keep(d.furniture, (f) => inside([f.x, f.y]))
-      d.electrical = keep(d.electrical, (f) => inside([f.x, f.y]))
-      d.plumbing = keep(d.plumbing, (f) => inside([f.x, f.y]))
-      d.runs = keep(d.runs, (r) => r.points.every(inside))
-      d.viewpoints = keep(d.viewpoints, (v) => inside([v.x, v.y]))
+      d.walls = d.walls.filter((x) => !walls.has(x.id))
+      d.openings = d.openings.filter((x) => !openings.has(x.id))
+      d.rooms = d.rooms.filter((x) => !rooms.has(x.id))
+      d.furniture = d.furniture.filter((x) => !furniture.has(x.id))
+      d.electrical = d.electrical.filter((x) => !electrical.has(x.id))
+      d.plumbing = d.plumbing.filter((x) => !plumbing.has(x.id))
+      d.runs = d.runs.filter((x) => !runs.has(x.id))
+      d.viewpoints = d.viewpoints.filter((x) => !viewpoints.has(x.id))
     })
     select(null)
-    notify(n ? `Deleted ${n} object${n === 1 ? '' : 's'} — Ctrl+Z to undo` : 'Nothing was fully inside the box')
+    notify(`Deleted ${n} object${n === 1 ? '' : 's'} — Ctrl+Z to undo`)
   }
 
   // ---- derived ----
