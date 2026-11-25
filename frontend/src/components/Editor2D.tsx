@@ -242,7 +242,7 @@ export default function Editor2D() {
       if (!hit) return notify('Click on a wall to place it')
       const o: Opening = {
         id: uid('o'), type: 'balcony', wallId: hit.wall.id, offset: hit.along, width: 2,
-        sill: 1, height: Math.max(0.5, plan.settings.wallHeight - 1), railing: 'glass',
+        sill: 1, height: Math.max(0.5, (hit.wall.height ?? plan.settings.wallHeight) - 1), railing: 'glass',
       }
       update((d) => void d.openings.push(o))
       select({ kind: 'opening', id: o.id })

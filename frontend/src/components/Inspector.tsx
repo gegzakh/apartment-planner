@@ -139,11 +139,12 @@ export default function Inspector() {
   if (sel.kind === 'opening') {
     const o = ent as Opening
     const wall = plan.walls.find((w) => w.id === o.wallId)
+    const wallH = wall?.height ?? plan.settings.wallHeight
     return (
       <div className="section">
         {header(o.type === 'door' ? 'Door' : o.type === 'window' ? 'Window' : o.type === 'balcony' ? 'Open balcony' : 'Opening')}
         <label className="row"><span>Type</span>
-          <select value={o.type} onChange={(e) => patch<Opening>((x) => { x.type = e.target.value as Opening['type']; if (x.type === 'window') { x.sill = 0.85; x.height = 1.5 } else if (x.type === 'balcony') { x.sill = 1; x.height = Math.max(0.5, plan.settings.wallHeight - 1); x.railing ??= 'glass' } else { x.sill = 0; x.height = 2.1 } })}>
+          <select value={o.type} onChange={(e) => patch<Opening>((x) => { x.type = e.target.value as Opening['type']; if (x.type === 'window') { x.sill = 0.85; x.height = 1.5 } else if (x.type === 'balcony') { x.sill = 1; x.height = Math.max(0.5, wallH - 1); x.railing ??= 'glass' } else { x.sill = 0; x.height = 2.1 } })}>
             <option value="door">Door</option><option value="window">Window</option><option value="opening">Open passage</option><option value="balcony">Open balcony (railing, no glass)</option>
           </select>
         </label>
@@ -157,7 +158,7 @@ export default function Inspector() {
             </select>
           </label>
           <Num label="Railing height" value={o.sill} onChange={(v) => patch<Opening>((x) => (x.sill = Math.max(0, v)))} />
-          <p className="small muted">Open (no glass) above the railing. Set Height so railing + height reaches the ceiling ({plan.settings.wallHeight} m) to remove the lintel.</p>
+          <p className="small muted">Open (no glass) above the railing. Set Height so railing + height reaches the top of this wall ({wallH} m) to remove the lintel.</p>
         </>}
         <Num label="From start" value={o.offset - o.width / 2} onChange={(v) => patch<Opening>((x) => (x.offset = v + x.width / 2))} />
         {wall && <p className="small muted">Wall length {wallFrame(wall).L.toFixed(2)} m · drag along the wall to move.</p>}
